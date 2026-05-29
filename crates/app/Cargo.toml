@@ -1,0 +1,23 @@
+[package]
+name = "app"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "strange-attractor"
+path = "src/main.rs"
+
+[dependencies]
+sim.path = "../sim"
+gpu.path = "../gpu"
+glam.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+pollster.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+egui-winit.workspace = true
+bytemuck.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true
+env_logger.workspace = true

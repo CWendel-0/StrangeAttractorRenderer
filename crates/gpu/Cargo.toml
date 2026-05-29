@@ -1,0 +1,12 @@
+[package]
+name = "gpu"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sim.path = "../sim"
+glam.workspace = true
+wgpu.workspace = true
+bytemuck.workspace = true
+log.workspace = true
+crossbeam-channel.workspace = true

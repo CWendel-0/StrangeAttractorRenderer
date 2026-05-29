@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug strange-attractor",
+            "cargo": {
+                "args": ["build", "--bin", "strange-attractor"],
+                "filter": {
+                    "name": "strange-attractor",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        }
+    ]
+}
