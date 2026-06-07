@@ -78,6 +78,9 @@ jobs:
             <key>NSPrincipalClass</key>         <string>NSApplication</string>
           </dict></plist>
           EOF
+          # Ad-hoc sign so Gatekeeper shows "unidentified developer" (right-click
+          # → Open to bypass) instead of "damaged and can't be opened".
+          codesign --force --deep --sign - "$APP"
           zip -r "${{ matrix.zip }}" "$APP"
 
       - name: Zip (Windows)
