@@ -12,12 +12,24 @@ pub struct Point {
     pub speed: f32,
 }
 
+/// How a parameter value should be interpreted and displayed in the UI.
+#[derive(Clone, Debug)]
+pub enum ParamKind {
+    /// Continuous real-valued parameter — shown as a velocity slider.
+    Continuous,
+    /// Integer-valued parameter — slider snaps to whole numbers.
+    Integer,
+    /// Enumerated choice — shown as a ComboBox; f32 value holds the selected index.
+    Enum(&'static [&'static str]),
+}
+
 /// Metadata for one parameter exposed to the UI.
 #[derive(Clone, Debug)]
 pub struct ParamDesc {
-    pub name: &'static str,
-    pub min: f32,
-    pub max: f32,
+    pub name:    &'static str,
+    pub kind:    ParamKind,
+    pub min:     f32,
+    pub max:     f32,
     pub default: f32,
 }
 
@@ -63,4 +75,11 @@ pub trait Attractor: Send + 'static {
 
     /// Current parameter values (same order as `param_descriptors`).
     fn params(&self) -> &[f32];
+
+    /// Current position in phase space (used by the shadow-orbit Lyapunov search).
+    fn pos(&self) -> Vec3;
+
+    /// Teleport to an arbitrary phase-space position without changing params.
+    /// Used by the shadow-orbit search to place the shadow trajectory.
+    fn set_pos(&mut self, pos: Vec3);
 }

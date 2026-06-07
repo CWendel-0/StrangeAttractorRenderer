@@ -1,17 +1,13 @@
 mod camera;
 mod gradient;
 mod ui;
+mod velocity_slider;
 
 use camera::ArcballCamera;
 use ui::UiState;
 
 use gpu::histogram::{CompositeParams, Histogram};
-use sim::{
-    Attractor,
-    attractor::ParamDesc,
-    estimate_bounds,
-    lorenz::Lorenz,
-};
+use sim::{AttractorConfig, AttractorType, SearchWorker};
 
 use glam::Vec2;
 use pollster::block_on;
@@ -36,7 +32,7 @@ struct GpuState {
 }
 
 impl GpuState {
-    async fn new(window: Arc<Window>, initial_lorenz_params: &[f32]) -> Self {
+    async fn new(window: Arc<Window>, initial_config: &AttractorConfig) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -61,9 +57,6 @@ impl GpuState {
                     label:             Some("device"),
                     required_features: wgpu::Features::empty(),
                     required_limits:   wgpu::Limits {
-                        // Request the adapter's true limits so large windows at 4× SS
-                        // don't hit the conservative wgpu defaults (256 MB buffer size,
-                        // 128 MB storage binding size).  Both must be raised together.
                         max_buffer_size:                  adapter.limits().max_buffer_size,
                         max_storage_buffer_binding_size:  adapter.limits().max_storage_buffer_binding_size,
                         ..wgpu::Limits::default()
@@ -76,8 +69,6 @@ impl GpuState {
             .expect("device creation failed");
 
         let caps   = surface.get_capabilities(&adapter);
-        // Prefer a non-sRGB format: the composite shader applies gamma manually,
-        // and an sRGB swapchain would apply it a second time.
         let format = caps
             .formats
             .iter()
@@ -98,7 +89,7 @@ impl GpuState {
         surface.configure(&device, &config);
 
         let histogram = Histogram::new(
-            &device, &queue, size.width, size.height, format, initial_lorenz_params,
+            &device, &queue, size.width, size.height, format, initial_config,
         );
 
         let egui_renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
@@ -124,8 +115,6 @@ struct App {
     window:    Option<Arc<Window>>,
     gpu:       Option<GpuState>,
 
-    descs:     &'static [ParamDesc],
-
     // Camera
     camera:    ArcballCamera,
 
@@ -139,7 +128,9 @@ struct App {
     egui_state: Option<egui_winit::State>,
     ui:         Option<UiState>,
 
-    pending_clear: bool,
+    pending_clear:  bool,
+    search_worker:  Option<SearchWorker>,
+    searching:      bool,
 }
 
 impl App {
@@ -147,7 +138,6 @@ impl App {
         Self {
             window:    None,
             gpu:       None,
-            descs:     Lorenz::param_descriptors(),
             camera:    ArcballCamera::new(1.0),
             mouse_pos: Vec2::ZERO,
             mouse_left: false,
@@ -156,6 +146,8 @@ impl App {
             egui_state: None,
             ui:         None,
             pending_clear: false,
+            search_worker: None,
+            searching:     false,
         }
     }
 }
@@ -170,16 +162,13 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
 
-        let defaults: Vec<f32> = self.descs.iter().map(|d| d.default).collect();
-
-        let gpu = block_on(GpuState::new(Arc::clone(&window), &defaults));
+        let init_config = AttractorConfig::new(AttractorType::default());
+        let gpu = block_on(GpuState::new(Arc::clone(&window), &init_config));
 
         let size   = window.inner_size();
         let aspect = size.width as f32 / size.height.max(1) as f32;
 
-        // Sample the attractor to find its bounding box, then fit the camera.
-        let mut lorenz = Lorenz::new();
-        let (bb_min, bb_max) = estimate_bounds(&mut lorenz, 200_000);
+        let (bb_min, bb_max) = init_config.estimate_bounds_cpu();
         self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
 
         let egui_state = egui_winit::State::new(
@@ -191,7 +180,7 @@ impl ApplicationHandler for App {
             None,
         );
 
-        self.ui = Some(UiState::from_descriptors(self.descs));
+        self.ui = Some(UiState::new());
 
         self.window     = Some(window);
         self.gpu        = Some(gpu);
@@ -204,7 +193,6 @@ impl ApplicationHandler for App {
         _id: WindowId,
         event: WindowEvent,
     ) {
-        // Forward to egui first.
         if let (Some(state), Some(window)) = (&mut self.egui_state, &self.window) {
             let resp = state.on_window_event(window, &event);
             if resp.consumed { return; }
@@ -220,7 +208,6 @@ impl ApplicationHandler for App {
                     gpu.resize(size);
                     self.camera.resize(size.width, size.height);
                 }
-                // Sync UI if resize() clamped ss_scale to fit the new window size.
                 let actual_ss = self.gpu.as_ref().map(|g| g.histogram.ss_scale);
                 if let (Some(ss), Some(ui)) = (actual_ss, self.ui.as_mut()) {
                     ui.ss_scale = ss;
@@ -284,20 +271,58 @@ impl App {
             _ => return,
         };
 
+        // ---- Search result handling ----
+        // Check before building the UI so button state is up to date this frame.
+        if let Some(worker) = &self.search_worker {
+            if let Ok(result) = worker.result_rx.try_recv() {
+                // Only apply if the user hasn't switched to a different attractor type.
+                if result.attractor_type == ui.attractor.attractor_type {
+                    ui.attractor.params = result.params;
+                    // Call reset_sim_states directly — ui.show() clears ui.dirty before
+                    // the if-ui.dirty check runs, so we can't route through that flag.
+                    gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
+
+                    let size   = window.inner_size();
+                    let aspect = size.width as f32 / size.height.max(1) as f32;
+                    self.camera = ArcballCamera::fit_aabb(aspect, result.bb_min, result.bb_max);
+                    self.pending_clear = true;
+                }
+                self.search_worker = None;
+                self.searching = false;
+            }
+        }
+
         // ---- egui input + UI ----
         let raw_input = egui_state.take_egui_input(window);
         self.egui_ctx.begin_pass(raw_input);
-        ui.show(&self.egui_ctx, self.descs);
+        ui.show(&self.egui_ctx, self.searching);
         let full_output = self.egui_ctx.end_pass();
         egui_state.handle_platform_output(window, full_output.platform_output.clone());
 
+        // ---- Search request handling ----
+        if ui.search_requested {
+            // Cancel any running search and start a fresh one.
+            self.search_worker = None;
+            self.searching = true;
+            self.search_worker = Some(SearchWorker::spawn(ui.attractor.clone()));
+        }
+
         if ui.dirty {
-            // Reset GPU trajectory states to the new attractor shape.
-            gpu.histogram.reset_sim_states(&gpu.queue, &ui.params);
+            gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
             self.pending_clear = true;
         }
 
-        // Upload gradient textures to GPU when edited.
+        if ui.type_changed {
+            // Cancel any search for the old type.
+            self.search_worker = None;
+            self.searching = false;
+
+            let size = window.inner_size();
+            let aspect = size.width as f32 / size.height.max(1) as f32;
+            let (bb_min, bb_max) = ui.attractor.estimate_bounds_cpu();
+            self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
+        }
+
         if ui.gradient_a_dirty {
             gpu.histogram.upload_gradient_a(&gpu.queue, &ui.gradient_a.to_rgba8());
             ui.gradient_a_dirty = false;
@@ -314,12 +339,10 @@ impl App {
 
         if ui.ss_scale != gpu.histogram.ss_scale {
             gpu.histogram.set_ss_scale(&gpu.device, ui.ss_scale);
-            // Reflect any clamp back to the UI so the button stays consistent.
             ui.ss_scale = gpu.histogram.ss_scale;
             self.pending_clear = true;
         }
 
-        // Poll for the previous frame's max-density readback.
         gpu.histogram.poll_max_density(&gpu.device);
 
         // ---- GPU frame ----
@@ -341,17 +364,11 @@ impl App {
             self.pending_clear = false;
         }
 
-        // Advance all GPU trajectories one batch and splat into the histogram.
         let vp = self.camera.view_proj();
-        gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.params);
+        gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.attractor);
 
-        // Composite accum → HDR intermediate (log density mapping).
         let w = gpu.config.width;
         let h = gpu.config.height;
-        // last_max_density is the peak value of any single super-sampled pixel in
-        // fixed-point units (× WEIGHT_SCALE = 1024).  A display pixel sums ss_scale²
-        // ss pixels, so max display density ≈ ss² × last_max / WEIGHT_SCALE.
-        // Must match WEIGHT_SCALE in sim.wgsl, de_h.wgsl, and composite.wgsl.
         const WEIGHT_SCALE: f32 = 1024.0;
         let ss = gpu.histogram.ss_scale;
         let max_display = gpu.histogram.last_max_density as f32 / WEIGHT_SCALE * (ss * ss) as f32;
@@ -376,10 +393,7 @@ impl App {
             ui.render_mode,
         );
 
-        // Blit HDR intermediate → swapchain.
         gpu.histogram.blit(&mut encoder, &view);
-
-        // Encode max-density readback copy (reads after all sim/splat work is done).
         gpu.histogram.encode_max_readback(&mut encoder);
 
         // ---- egui render pass ----
@@ -420,7 +434,6 @@ impl App {
         gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
 
-        // Schedule async map now that the GPU work is submitted.
         gpu.histogram.submit_max_readback();
     }
 }

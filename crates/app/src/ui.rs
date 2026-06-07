@@ -1,17 +1,25 @@
 use egui::Context;
-use sim::attractor::ParamDesc;
+use sim::{AttractorConfig, AttractorType, ParamKind};
 use gpu::{BlendMode, RenderMode};
 
+// C(O+3,3) = (O+1)(O+2)(O+3)/6 — monomials per equation for Sprott polynomial order O
+fn sprott_num_terms(order: usize) -> usize {
+    (order + 1) * (order + 2) * (order + 3) / 6
+}
+
 use crate::gradient::{Gradient, gradient_editor};
+use crate::velocity_slider::velocity_slider;
 
 pub struct UiState {
-    pub params:     Vec<f32>,
+    pub attractor:  AttractorConfig,
     pub brightness: f32,
     pub gamma:      f32,
     pub max_sigma:  f32,
     pub min_sigma:  f32,
     pub ss_scale:   u32,
-    pub dirty:      bool,   // true when sim params changed this frame
+    pub dirty:          bool,
+    pub type_changed:   bool,
+    pub search_requested: bool,
 
     // ---- render mode ----
     pub render_mode: RenderMode,
@@ -23,64 +31,199 @@ pub struct UiState {
     pub gradient_b_dirty: bool,
     pub blend_mode:       BlendMode,
 
-    // Selected stop index for each gradient editor (persisted across frames).
     selected_stop_a: Option<usize>,
     selected_stop_b: Option<usize>,
+
+    attractor_open: bool,
 }
 
 impl UiState {
-    pub fn from_descriptors(descs: &[ParamDesc]) -> Self {
+    pub fn new() -> Self {
         Self {
-            params:     descs.iter().map(|d| d.default).collect(),
+            attractor:  AttractorConfig::new(AttractorType::default()),
             brightness: 1.0,
             gamma:      2.2,
             max_sigma:  1.5,
             min_sigma:  0.1,
             ss_scale:   2,
-            dirty:      false,
+            dirty:            false,
+            type_changed:     false,
+            search_requested: false,
             render_mode: RenderMode::Monochrome,
             gradient_a:       Gradient::density_default(),
             gradient_b:       Gradient::speed_default(),
-            gradient_a_dirty: true,   // upload on first frame
+            gradient_a_dirty: true,
             gradient_b_dirty: true,
             blend_mode:      BlendMode::Add,
             selected_stop_a: None,
             selected_stop_b: None,
+            attractor_open: true,
         }
     }
 
-    pub fn show(&mut self, ctx: &Context, descs: &[ParamDesc]) {
+    pub fn show(&mut self, ctx: &Context, searching: bool) {
         self.dirty = false;
+        self.type_changed = false;
+        self.search_requested = false;
 
-        egui::SidePanel::left("attractor_panel")
+        // ---- Floating attractor + parameters window ----
+        egui::Window::new("Attractor")
+            .open(&mut self.attractor_open)
+            .resizable(true)
+            .default_width(280.0)
+            .default_height(500.0)
+            .show(ctx, |ui| {
+                ui.label("Attractor type");
+                let prev_type = self.attractor.attractor_type;
+                egui::ComboBox::from_id_salt("attractor_type")
+                    .selected_text(self.attractor.attractor_type.label())
+                    .show_ui(ui, |ui| {
+                        for &t in AttractorType::ALL {
+                            ui.selectable_value(&mut self.attractor.attractor_type, t, t.label());
+                        }
+                    });
+                if self.attractor.attractor_type != prev_type {
+                    self.attractor = AttractorConfig::new(self.attractor.attractor_type);
+                    self.dirty = true;
+                    self.type_changed = true;
+                }
+
+                ui.horizontal(|ui| {
+                    let label = if searching { "Searching…" } else { "Randomize" };
+                    if ui.add_enabled(!searching, egui::Button::new(label)).clicked() {
+                        self.search_requested = true;
+                    }
+                });
+
+                ui.separator();
+
+                if self.attractor.attractor_type == AttractorType::PolySprott {
+                    // Order spinner lives above the scroll so it stays visible while scrolling.
+                    let mut order_val = self.attractor.params[0] as i32;
+                    ui.horizontal(|ui| {
+                        ui.label("Order");
+                        if ui.add(
+                            egui::DragValue::new(&mut order_val)
+                                .range(2..=5)
+                                .speed(1.0),
+                        ).changed() {
+                            self.attractor.params[0] = order_val as f32;
+                            self.dirty = true;
+                        }
+                    });
+
+                    let n = sprott_num_terms(order_val as usize);
+                    ui.label(format!("Parameters  ({} × 3)", n));
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("params_scroll")
+                        .show(ui, |ui| {
+                            // X equation: params[1..=n]
+                            for k in 0..n {
+                                let label = format!("P{}", k);
+                                if velocity_slider(
+                                    ui,
+                                    &mut self.attractor.params[1 + k],
+                                    -1.5, 1.5,
+                                    &label,
+                                    egui::Id::new(("ps_x", k)),
+                                ) { self.dirty = true; }
+                            }
+                            // Y equation: params[57..=56+n]
+                            for k in 0..n {
+                                let label = format!("P{}", n + k);
+                                if velocity_slider(
+                                    ui,
+                                    &mut self.attractor.params[57 + k],
+                                    -1.5, 1.5,
+                                    &label,
+                                    egui::Id::new(("ps_y", k)),
+                                ) { self.dirty = true; }
+                            }
+                            // Z equation: params[113..=112+n]
+                            for k in 0..n {
+                                let label = format!("P{}", 2 * n + k);
+                                if velocity_slider(
+                                    ui,
+                                    &mut self.attractor.params[113 + k],
+                                    -1.5, 1.5,
+                                    &label,
+                                    egui::Id::new(("ps_z", k)),
+                                ) { self.dirty = true; }
+                            }
+                        });
+                } else {
+                    ui.label("Parameters");
+                    egui::ScrollArea::vertical()
+                        .id_salt("params_scroll")
+                        .show(ui, |ui| {
+                            let descs = self.attractor.descriptors();
+                            for (i, desc) in descs.iter().enumerate() {
+                                match &desc.kind {
+                                    ParamKind::Continuous => {
+                                        if velocity_slider(
+                                            ui,
+                                            &mut self.attractor.params[i],
+                                            desc.min,
+                                            desc.max,
+                                            desc.name,
+                                            egui::Id::new(("param_slider", i)),
+                                        ) { self.dirty = true; }
+                                    }
+                                    ParamKind::Integer => {
+                                        let mut val = self.attractor.params[i] as i32;
+                                        ui.horizontal(|ui| {
+                                            ui.label(desc.name);
+                                            if ui.add(
+                                                egui::DragValue::new(&mut val)
+                                                    .range(desc.min as i32..=desc.max as i32)
+                                                    .speed(1.0),
+                                            ).changed() {
+                                                self.attractor.params[i] = val as f32;
+                                                self.dirty = true;
+                                            }
+                                        });
+                                    }
+                                    ParamKind::Enum(choices) => {
+                                        let cur = self.attractor.params[i] as usize;
+                                        let label = choices.get(cur).copied().unwrap_or("?");
+                                        let mut idx = cur;
+                                        egui::ComboBox::from_label(desc.name)
+                                            .selected_text(label)
+                                            .show_ui(ui, |ui| {
+                                                for (j, &ch) in choices.iter().enumerate() {
+                                                    ui.selectable_value(&mut idx, j, ch);
+                                                }
+                                            });
+                                        if idx != cur {
+                                            self.attractor.params[i] = idx as f32;
+                                            self.dirty = true;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                }
+            });
+
+        // ---- Sidebar: rendering / display controls only ----
+        egui::SidePanel::left("render_panel")
             .resizable(true)
             .default_width(240.0)
             .show(ctx, |ui| {
-                ui.heading("Lorenz");
-                ui.separator();
-
-                ui.label("Parameters");
-                for (i, desc) in descs.iter().enumerate() {
-                    let old = self.params[i];
-                    ui.add(
-                        egui::Slider::new(&mut self.params[i], desc.min..=desc.max)
-                            .text(desc.name)
-                            .clamping(egui::SliderClamping::Always),
-                    );
-                    if (self.params[i] - old).abs() > 1e-4 {
-                        self.dirty = true;
+                if !self.attractor_open {
+                    if ui.button("Attractor…").clicked() {
+                        self.attractor_open = true;
                     }
+                    ui.separator();
                 }
 
-                ui.separator();
                 ui.label("Rendering mode");
                 ui.horizontal(|ui| {
                     let was = self.render_mode;
                     ui.selectable_value(&mut self.render_mode, RenderMode::Monochrome, "Monochrome");
                     ui.selectable_value(&mut self.render_mode, RenderMode::Light, "Light");
                     if self.render_mode != was {
-                        // Switching mode clears the accumulation so the new colours show
-                        // immediately instead of mixing with old mono data.
                         self.dirty = true;
                     }
                 });
@@ -100,9 +243,6 @@ impl UiState {
 
                 ui.separator();
                 ui.label("Blur (Density Estimation)");
-                // Cap at 5.0: each DE kernel tap reads ss_scale² accum values, so
-                // radius = ceil(sigma*3). At 4× SS with sigma=5 → 15 taps × 16 reads
-                // per pixel; above that the DE passes become the frame-rate bottleneck.
                 ui.add(
                     egui::Slider::new(&mut self.max_sigma, 0.1..=5.0)
                         .text("Max blur σ")
@@ -113,10 +253,8 @@ impl UiState {
                         .text("Min blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
-                // Clamp after both sliders render so the user sees the constrained value.
                 self.min_sigma = self.min_sigma.min(self.max_sigma);
 
-                // ---- Light mode gradient editors ----
                 if self.render_mode == RenderMode::Light {
                     ui.separator();
                     ui.horizontal(|ui| {

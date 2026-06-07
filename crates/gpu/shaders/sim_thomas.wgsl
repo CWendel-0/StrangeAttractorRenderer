@@ -1,27 +1,20 @@
-// GPU-side Lorenz attractor simulation.
+// GPU-side Thomas attractor simulation.
 //
-// Each invocation independently integrates one Lorenz trajectory and bilinearly
-// splats every step into the super-sampled accumulation histogram.  Running
-// thousands of trajectories in parallel gives orders-of-magnitude more
-// throughput than a single CPU thread.
+// Params in p[]:
+//   p[0].x = b, p[0].y = dt
 //
-// accum layout: interleaved u32 pairs per super-sampled pixel.
-//   accum[base + 0]  density  (sum of bilinear weights, scale WEIGHT_SCALE=1024)
-//   accum[base + 1]  speed    (log-encoded speed × weight / SPEED_SCALE=256)
-//
-// mean_speed at composite = accum[base+1] / accum[base+0]
-//   = weighted_mean(speed_enc) / SPEED_SCALE  ∈ [0, ~1)
-//
-// SimParams.p is a vec4 array encoding attractor-specific params:
-//   p[0].x = a (σ), p[0].y = b (ρ), p[0].z = c (β), p[0].w = dt
+// Equations:
+//   x' = x + dt*(-b*x + sin(y))
+//   y' = y + dt*(-b*y + sin(z))
+//   z' = z + dt*(-b*z + sin(x))
 
 struct SimParams {
-    view_proj: mat4x4<f32>,          // offset 0,  64 bytes
-    ss_width:  u32,                   // offset 64
-    ss_height: u32,                   // offset 68
-    steps:     u32,                   // offset 72
-    num_traj:  u32,                   // offset 76
-    p:         array<vec4<f32>, 12>,  // offset 80, 192 bytes → total 272 bytes
+    view_proj: mat4x4<f32>,
+    ss_width:  u32,
+    ss_height: u32,
+    steps:     u32,
+    num_traj:  u32,
+    p:         array<vec4<f32>, 12>,
 }
 
 @group(0) @binding(0) var<storage, read_write> states:      array<vec4<f32>>;
@@ -29,11 +22,8 @@ struct SimParams {
 @group(0) @binding(2) var<storage, read_write> max_density: atomic<u32>;
 @group(0) @binding(3) var<uniform>             params:      SimParams;
 
-// Must match WEIGHT_SCALE in main.rs, de_h.wgsl, composite.wgsl, and composite_light.wgsl.
 const WEIGHT_SCALE: f32 = 1024.0;
-
-// Divisor applied to speed_enc before adding to accum[base+1].
-const SPEED_SCALE: u32 = 256u;
+const SPEED_SCALE:  u32 = 256u;
 
 fn splat_pixel(px: i32, py: i32, weight: u32, speed_contrib: u32) {
     if weight == 0u || px < 0 || py < 0 { return; }
@@ -41,7 +31,6 @@ fn splat_pixel(px: i32, py: i32, weight: u32, speed_contrib: u32) {
     let upy = u32(py);
     if upx >= params.ss_width || upy >= params.ss_height { return; }
     let base = (upy * params.ss_width + upx) * 2u;
-
     if atomicLoad(&accum[base]) < 0x7FFFFFFFu {
         let prev = atomicAdd(&accum[base], weight);
         atomicMax(&max_density, prev + weight);
@@ -60,15 +49,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var y = states[traj].y;
     var z = states[traj].z;
 
-    let a  = params.p[0].x;
-    let b  = params.p[0].y;
-    let c  = params.p[0].z;
-    let dt = params.p[0].w;
+    let b  = params.p[0].x;
+    let dt = params.p[0].y;
 
     for (var i = 0u; i < params.steps; i++) {
-        let vx = a * (y - x);
-        let vy = b * x - y - z * x;
-        let vz = x * y - c * z;
+        let vx = -b * x + sin(y);
+        let vy = -b * y + sin(z);
+        let vz = -b * z + sin(x);
 
         let nx = x + dt * vx;
         let ny = y + dt * vy;
@@ -79,9 +66,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             x = 0.1; y = 0.0; z = f32(traj % 256u) * 0.01;
             for (var w = 0u; w < 500u; w++) {
                 let wx = x; let wy = y; let wz = z;
-                x = wx + a * dt * (wy - wx);
-                y = wy + dt * (b * wx - wy - wz * wx);
-                z = wz + dt * (wx * wy - c * wz);
+                x = wx + dt * (-b * wx + sin(wy));
+                y = wy + dt * (-b * wy + sin(wz));
+                z = wz + dt * (-b * wz + sin(wx));
             }
             continue;
         }

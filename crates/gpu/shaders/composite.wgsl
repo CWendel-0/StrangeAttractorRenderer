@@ -102,8 +102,8 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         weighted += d * w;
         total_w  += w;
     }
-    // de_h_tex values are already log-mapped; apply brightness scaling and gamma only.
+    // de_h_tex values are already log-mapped to [0,1]; brightness scales the output.
     let blurred_log = weighted / max(total_w, 1e-6);
-    let v = pow(clamp(blurred_log * params.brightness, 0.0, 1.0), 1.0 / params.gamma);
+    let v = clamp(pow(clamp(blurred_log, 0.0, 1.0), 1.0 / params.gamma) * params.brightness, 0.0, 1.0);
     return vec4<f32>(v, v, v, 1.0);
 }

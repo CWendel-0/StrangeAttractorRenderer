@@ -1,5 +1,24 @@
 pub mod attractor;
+pub mod chaotic_flow;
+pub mod clifford;
+pub mod config;
+pub mod icon;
+pub mod icon_b;
 pub mod lorenz;
+pub mod lorenz84;
+pub mod pickover;
+pub mod poly_a;
+pub mod poly_abs;
+pub mod poly_b;
+pub mod poly_c;
+pub mod poly_pow;
+pub mod poly_sin;
+pub mod poly_sprott;
+pub mod rossler;
+pub mod search;
+pub mod thomas;
 pub mod worker;
 
-pub use attractor::{Attractor, ParamDesc, Point, estimate_bounds};
+pub use attractor::{Attractor, ParamDesc, ParamKind, Point, estimate_bounds};
+pub use config::{AttractorConfig, AttractorType};
+pub use search::{SearchResult, SearchWorker};

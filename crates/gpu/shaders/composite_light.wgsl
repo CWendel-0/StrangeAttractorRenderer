@@ -128,8 +128,9 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     // blurred_log is already in [0, 1] (log-mapped by the horizontal pass).
     let blurred_log = weighted / max(total_w, 1e-6);
 
-    // Gradient A: sample by log-density (same scale as monochrome brightness).
-    let density_01 = clamp(blurred_log * params.brightness, 0.0, 1.0);
+    // Gradient A: sample by log-density across the full gradient range.
+    // brightness is applied after blending so it never clips the gradient lookup.
+    let density_01 = clamp(blurred_log, 0.0, 1.0);
     let col_a = sample_grad(gradient_a, density_01);
 
     // Gradient B: sample by mean speed.
@@ -177,6 +178,6 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         }
     }
 
-    let v = pow(clamp(blended, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / params.gamma));
+    let v = pow(clamp(blended * params.brightness, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / params.gamma));
     return vec4<f32>(v, 1.0);
 }

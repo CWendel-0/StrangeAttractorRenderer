@@ -1,5 +1,5 @@
 use glam::Vec3;
-use crate::attractor::{Attractor, ParamDesc, Point};
+use crate::attractor::{Attractor, ParamDesc, ParamKind, Point};
 
 // Params: [a, b, c, d]  (a=sigma, b=rho, c=beta, d=dt)
 // Integration follows the explicit Euler form:
@@ -7,10 +7,10 @@ use crate::attractor::{Attractor, ParamDesc, Point};
 //   y' = y + d*(b*x - y - z*x)
 //   z' = z + d*(x*y - c*z)
 const DESCS: &[ParamDesc] = &[
-    ParamDesc { name: "A",  min: 1.0,   max: 30.0, default: 16.227 },
-    ParamDesc { name: "B",  min: 1.0,   max: 60.0, default: 15.223 },
-    ParamDesc { name: "C",  min: 0.1,   max: 8.0,  default: 8.018  },
-    ParamDesc { name: "dT", min: 0.001, max: 0.05,  default: 0.049  },
+    ParamDesc { name: "A",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 16.227 },
+    ParamDesc { name: "B",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 15.223 },
+    ParamDesc { name: "C",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 8.018  },
+    ParamDesc { name: "dT", kind: ParamKind::Continuous, min: 0.0, max: 0.5,  default: 0.049  },
 ];
 
 pub struct Lorenz {
@@ -91,4 +91,7 @@ impl Attractor for Lorenz {
     fn params(&self) -> &[f32] {
         &self.params
     }
+
+    fn pos(&self) -> Vec3 { self.state }
+    fn set_pos(&mut self, pos: Vec3) { self.state = pos; }
 }

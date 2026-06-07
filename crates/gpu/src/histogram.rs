@@ -1,22 +1,17 @@
+use std::collections::HashMap;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
 
 use glam::Mat4;
+use sim::{AttractorConfig, AttractorType};
 
 /// Interleaved u32 pairs: [density, speed_fixed] per pixel.
 /// density (index 0) accumulates bilinear weights; speed (index 1) accumulates
 /// log-encoded speed × weight / SPEED_SCALE — see sim.wgsl for details.
 const ACCUM_ELEM_SIZE: u64 = 8;
 
-/// Default Lorenz parameters [σ, ρ, β, dt] — must match lorenz.rs::DESCS defaults.
-const LORENZ_DEFAULTS: [f32; 4] = [16.227, 15.223, 8.018, 0.049];
-
-#[inline]
-fn lorenz_param(params: &[f32], i: usize) -> f32 {
-    params.get(i).copied().unwrap_or(LORENZ_DEFAULTS[i])
-}
 const DEFAULT_SS_SCALE: u32 = 2;
 
 /// Number of independent Lorenz trajectories simulated in parallel on the GPU.
@@ -91,20 +86,25 @@ impl BlendMode {
 // GPU structs (must match WGSL layouts exactly)
 // ---------------------------------------------------------------------------
 
+// SimParams layout must match the WGSL struct in all sim shaders.
+// p is array<vec4<f32>, N> in WGSL (std140 requires vec4 stride = 4×f32).
+// Most shaders declare N=12 (192 bytes of p → total 272 bytes).
+// sim_poly_sprott.wgsl declares N=43 (688 bytes of p → total 768 bytes).
+// Binding a 768-byte buffer to shaders that only declare 272 bytes is valid
+// since min_binding_size is None — wgpu only checks the lower bound.
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone)]
 struct SimParams {
-    view_proj: [f32; 16], // 64 bytes
-    ss_width:  u32,
-    ss_height: u32,
-    steps:     u32,
-    num_traj:  u32,
-    a:         f32,
-    b:         f32,
-    c:         f32,
-    dt:        f32,
-    // total 96 bytes ✓
+    view_proj: [f32; 16],  // offset 0,  64 bytes
+    ss_width:  u32,        // offset 64
+    ss_height: u32,        // offset 68
+    steps:     u32,        // offset 72
+    num_traj:  u32,        // offset 76
+    p:         [f32; 172], // offset 80, 688 bytes → total 768 bytes
 }
+// Safety: repr(C), all fields are Pod/Zeroable, no padding (all fields 4-byte aligned).
+unsafe impl bytemuck::Pod for SimParams {}
+unsafe impl bytemuck::Zeroable for SimParams {}
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -135,8 +135,8 @@ pub struct Histogram {
     // ---- accumulation buffer (ss_scale× super-sampled) ----
     accum_buf: wgpu::Buffer,
 
-    // ---- GPU simulation (Lorenz on GPU) ----
-    sim_pipeline:    wgpu::ComputePipeline,
+    // ---- GPU simulation (one pipeline per attractor type) ----
+    sim_pipelines:   HashMap<AttractorType, wgpu::ComputePipeline>,
     sim_bind_layout: wgpu::BindGroupLayout,
     sim_state_buf:   wgpu::Buffer,
     sim_params_buf:  wgpu::Buffer,
@@ -185,6 +185,11 @@ pub struct Histogram {
     cached_composite_bg:       wgpu::BindGroup,
     cached_composite_light_bg: wgpu::BindGroup,
     cached_blit_bg:            wgpu::BindGroup,
+
+    // ---- attractor seed (a known-good point on the current attractor) ----
+    // Stored in SimParams p[7].xyz so GPU shaders can use it as a reset IC.
+    // Uses Cell for interior mutability so reset_sim_states can keep &self.
+    attractor_seed: std::cell::Cell<[f32; 3]>,
 }
 
 impl Histogram {
@@ -194,7 +199,7 @@ impl Histogram {
         width:  u32,
         height: u32,
         surface_format: wgpu::TextureFormat,
-        initial_lorenz_params: &[f32],
+        initial_config: &AttractorConfig,
     ) -> Self {
         let ss_scale = DEFAULT_SS_SCALE;
         let ss_w = width  * ss_scale;
@@ -223,12 +228,7 @@ impl Histogram {
             mapped_at_creation: false,
         });
 
-        // ---- GPU simulation pipeline ----
-        let sim_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label:  Some("sim_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/sim.wgsl").into()),
-        });
-
+        // ---- GPU simulation pipelines (one per attractor type, shared bind layout) ----
         let sim_bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label:   Some("sim_bgl"),
             entries: &[
@@ -239,18 +239,26 @@ impl Histogram {
             ],
         });
 
-        let sim_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label:  Some("sim_pipeline"),
-            layout: Some(&device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label:                Some("sim_pl"),
-                bind_group_layouts:   &[&sim_bind_layout],
-                push_constant_ranges: &[],
-            })),
-            module:              &sim_shader,
-            entry_point:         "main",
-            compilation_options: Default::default(),
-            cache:               None,
-        });
+        let sim_pipelines = {
+            let mut map = HashMap::new();
+            map.insert(AttractorType::Lorenz,   make_sim_pipeline(device, include_str!("../shaders/sim.wgsl"),          &sim_bind_layout, "sim_lorenz"));
+            map.insert(AttractorType::Lorenz84, make_sim_pipeline(device, include_str!("../shaders/sim_lorenz84.wgsl"), &sim_bind_layout, "sim_lorenz84"));
+            map.insert(AttractorType::Rossler,  make_sim_pipeline(device, include_str!("../shaders/sim_rossler.wgsl"),  &sim_bind_layout, "sim_rossler"));
+            map.insert(AttractorType::Thomas,      make_sim_pipeline(device, include_str!("../shaders/sim_thomas.wgsl"),        &sim_bind_layout, "sim_thomas"));
+            map.insert(AttractorType::ChaoticFlow, make_sim_pipeline(device, include_str!("../shaders/sim_chaotic_flow.wgsl"), &sim_bind_layout, "sim_chaotic_flow"));
+            map.insert(AttractorType::Pickover,    make_sim_pipeline(device, include_str!("../shaders/sim_pickover.wgsl"),     &sim_bind_layout, "sim_pickover"));
+            map.insert(AttractorType::Clifford,    make_sim_pipeline(device, include_str!("../shaders/sim_clifford.wgsl"),     &sim_bind_layout, "sim_clifford"));
+            map.insert(AttractorType::Icon,        make_sim_pipeline(device, include_str!("../shaders/sim_icon.wgsl"),         &sim_bind_layout, "sim_icon"));
+            map.insert(AttractorType::IconB,       make_sim_pipeline(device, include_str!("../shaders/sim_icon_b.wgsl"),       &sim_bind_layout, "sim_icon_b"));
+            map.insert(AttractorType::PolyA,       make_sim_pipeline(device, include_str!("../shaders/sim_poly_a.wgsl"),       &sim_bind_layout, "sim_poly_a"));
+            map.insert(AttractorType::PolyAbs,     make_sim_pipeline(device, include_str!("../shaders/sim_poly_abs.wgsl"),     &sim_bind_layout, "sim_poly_abs"));
+            map.insert(AttractorType::PolyB,       make_sim_pipeline(device, include_str!("../shaders/sim_poly_b.wgsl"),       &sim_bind_layout, "sim_poly_b"));
+            map.insert(AttractorType::PolyC,       make_sim_pipeline(device, include_str!("../shaders/sim_poly_c.wgsl"),       &sim_bind_layout, "sim_poly_c"));
+            map.insert(AttractorType::PolyPow,     make_sim_pipeline(device, include_str!("../shaders/sim_poly_pow.wgsl"),     &sim_bind_layout, "sim_poly_pow"));
+            map.insert(AttractorType::PolySin,     make_sim_pipeline(device, include_str!("../shaders/sim_poly_sin.wgsl"),     &sim_bind_layout, "sim_poly_sin"));
+            map.insert(AttractorType::PolySprott,  make_sim_pipeline(device, include_str!("../shaders/sim_poly_sprott.wgsl"),  &sim_bind_layout, "sim_poly_sprott"));
+            map
+        };
 
         let sim_state_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label:              Some("sim_state_buf"),
@@ -266,8 +274,9 @@ impl Histogram {
             mapped_at_creation: false,
         });
 
-        // Upload initial trajectory states (spread across the attractor).
-        let initial_states = make_lorenz_states(SIM_NUM_TRAJECTORIES, initial_lorenz_params);
+        // Upload initial trajectory states spread across the attractor.
+        let initial_states = make_attractor_states(SIM_NUM_TRAJECTORIES, initial_config);
+        let initial_seed = seed_from_states(&initial_states);
         queue.write_buffer(&sim_state_buf, 0, bytemuck::cast_slice(&initial_states));
 
         // ---- horizontal DE pipeline ----
@@ -573,7 +582,7 @@ impl Histogram {
             height,
             ss_scale,
             accum_buf,
-            sim_pipeline,
+            sim_pipelines,
             sim_bind_layout,
             sim_state_buf,
             sim_params_buf,
@@ -606,6 +615,7 @@ impl Histogram {
             cached_composite_bg,
             cached_composite_light_bg,
             cached_blit_bg,
+            attractor_seed: std::cell::Cell::new(initial_seed),
         }
     }
 
@@ -890,9 +900,10 @@ impl Histogram {
     // ---- public API ----
 
     /// Reinitialise all trajectory states with fresh ICs spread across the attractor.
-    /// Call this when the attractor parameters change.
-    pub fn reset_sim_states(&self, queue: &wgpu::Queue, lorenz_params: &[f32]) {
-        let states = make_lorenz_states(SIM_NUM_TRAJECTORIES, lorenz_params);
+    /// Call this when attractor type or parameters change.
+    pub fn reset_sim_states(&self, queue: &wgpu::Queue, config: &AttractorConfig) {
+        let states = make_attractor_states(SIM_NUM_TRAJECTORIES, config);
+        self.attractor_seed.set(seed_from_states(&states));
         queue.write_buffer(&self.sim_state_buf, 0, bytemuck::cast_slice(&states));
     }
 
@@ -900,29 +911,41 @@ impl Histogram {
     /// `SIM_STEPS_PER_DISPATCH` Euler steps and splats them into the histogram.
     pub fn dispatch_sim(
         &self,
-        queue:         &wgpu::Queue,
-        encoder:       &mut wgpu::CommandEncoder,
-        view_proj:     Mat4,
-        lorenz_params: &[f32],
+        queue:     &wgpu::Queue,
+        encoder:   &mut wgpu::CommandEncoder,
+        view_proj: Mat4,
+        config:    &AttractorConfig,
     ) {
         let ss_w = self.width  * self.ss_scale;
         let ss_h = self.height * self.ss_scale;
+
+        // Copy attractor params into the fixed-size array; unused slots stay 0.
+        // Seed hint (p[44-46]) is only written when params don't extend into that
+        // region — PolySprott has 169 params and manages its own IC seeding on GPU.
+        let mut p = [0.0f32; 172];
+        let n = config.params.len().min(172);
+        p[..n].copy_from_slice(&config.params[..n]);
+        if n <= 44 {
+            let seed = self.attractor_seed.get();
+            p[44] = seed[0];
+            p[45] = seed[1];
+            p[46] = seed[2];
+        }
+
         queue.write_buffer(&self.sim_params_buf, 0, bytemuck::bytes_of(&SimParams {
             view_proj: view_proj.to_cols_array(),
             ss_width:  ss_w,
             ss_height: ss_h,
             steps:     SIM_STEPS_PER_DISPATCH,
             num_traj:  SIM_NUM_TRAJECTORIES,
-            a:  lorenz_param(lorenz_params, 0),
-            b:  lorenz_param(lorenz_params, 1),
-            c:  lorenz_param(lorenz_params, 2),
-            dt: lorenz_param(lorenz_params, 3),
+            p,
         }));
 
+        let pipeline = &self.sim_pipelines[&config.attractor_type];
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("sim_pass"), timestamp_writes: None,
         });
-        cpass.set_pipeline(&self.sim_pipeline);
+        cpass.set_pipeline(pipeline);
         cpass.set_bind_group(0, &self.cached_sim_bg, &[]);
         let workgroups = (SIM_NUM_TRAJECTORIES + 255) / 256;
         cpass.dispatch_workgroups(workgroups, 1, 1);
@@ -1043,57 +1066,554 @@ impl Histogram {
 }
 
 // ---------------------------------------------------------------------------
-// CPU-side Lorenz state initialisation
+// GPU compute pipeline helper
 // ---------------------------------------------------------------------------
 
-/// Generate `num` initial trajectory states spread across the Lorenz attractor.
-///
-/// Samples from 32 independent warm-up trajectories (different ICs) so the initial
-/// positions are distributed across distinct attractor regions rather than clustered
-/// along a single arc.  Within each group, adjacent samples are 100 steps apart —
-/// well beyond the Lyapunov time (~22 steps for default params) — so they diverge
-/// immediately rather than staying correlated for the first few frames.
+fn make_sim_pipeline(
+    device:      &wgpu::Device,
+    shader_src:  &str,
+    bind_layout: &wgpu::BindGroupLayout,
+    label:       &str,
+) -> wgpu::ComputePipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label:  Some(label),
+        source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+    });
+    let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label:                Some(label),
+        bind_group_layouts:   &[bind_layout],
+        push_constant_ranges: &[],
+    });
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label:  Some(label),
+        layout: Some(&pl),
+        module: &shader,
+        entry_point:         "main",
+        compilation_options: Default::default(),
+        cache:               None,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// CPU-side attractor state initialisation
+// ---------------------------------------------------------------------------
+
+fn make_attractor_states(num: u32, config: &AttractorConfig) -> Vec<[f32; 4]> {
+    match config.attractor_type {
+        AttractorType::Lorenz      => make_lorenz_states(num, &config.params),
+        AttractorType::Lorenz84    => make_lorenz84_states(num, &config.params),
+        AttractorType::Rossler     => make_rossler_states(num, &config.params),
+        AttractorType::Thomas      => make_thomas_states(num, &config.params),
+        AttractorType::ChaoticFlow => make_chaotic_flow_states(num, &config.params),
+        AttractorType::Pickover    => make_map_states(num, &config.params, |p, x, y, z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            ((a*y).sin() - z*(b*x).cos(), z*(c*x).sin() - (d*y).cos(), x.sin())
+        }),
+        AttractorType::Clifford    => make_map_states(num, &config.params, |p, x, y, _z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            ((a*y).sin() + c*(a*x).cos(), (b*x).sin() + d*(b*y).cos(), 0.0)
+        }),
+        AttractorType::Icon  => make_map_states_icon(num, &config.params),
+        AttractorType::IconB => make_map_states_icon_b(num, &config.params),
+        AttractorType::PolyA => make_map_states(num, &config.params, |p, x, y, z| {
+            let (p0, p1, p2) = (p[0], p[1], p[2]);
+            (p0 + y - z * y, p1 + z - x * z, p2 + x - y * x)
+        }),
+        AttractorType::PolyAbs => make_map_states(num, &config.params, |p, x, y, z| (
+            p[0]  + p[1]*x  + p[2]*y  + p[3]*z  + p[4]*x.abs()  + p[5]*y.abs()  + p[6]*z.abs(),
+            p[7]  + p[8]*x  + p[9]*y  + p[10]*z + p[11]*x.abs() + p[12]*y.abs() + p[13]*z.abs(),
+            p[14] + p[15]*x + p[16]*y + p[17]*z + p[18]*x.abs() + p[19]*y.abs() + p[20]*z.abs(),
+        )),
+        AttractorType::PolyB => make_map_states(num, &config.params, |p, x, y, z| {
+            (p[0] + y - z * (p[1] + y), p[2] + z - x * (p[3] + z), p[4] + x - y * (p[5] + x))
+        }),
+        AttractorType::PolyC => make_map_states(num, &config.params, |p, x, y, z| {
+            (
+                p[0] + x * (p[1] + p[2] * x + p[3] * y) + y * (p[4] + p[5] * y),
+                p[6] + y * (p[7] + p[8] * y + p[9] * z) + z * (p[10] + p[11] * z),
+                p[12] + z * (p[13] + p[14] * z + p[15] * x) + x * (p[16] + p[17] * x),
+            )
+        }),
+        AttractorType::PolyPow => make_map_states(num, &config.params, |p, x, y, z| (
+            p[0]  + p[1]*x  + p[2]*y  + p[3]*z  + p[4]*x.abs()  + p[5]*y.abs()  + p[6]*z.abs().powf(p[7]),
+            p[8]  + p[9]*x  + p[10]*y + p[11]*z + p[12]*x.abs() + p[13]*y.abs() + p[14]*z.abs().powf(p[15]),
+            p[16] + p[17]*x + p[18]*y + p[19]*z + p[20]*x.abs() + p[21]*y.abs() + p[22]*z.abs().powf(p[23]),
+        )),
+        AttractorType::PolySin => make_map_states(num, &config.params, |p, x, y, z| (
+            p[0]  + p[1]*x  + p[2]*y  + p[3]*z
+                  + p[4]*(p[5]*x+p[6]).sin()   + p[7]*(p[8]*y+p[9]).sin()   + p[10]*(p[11]*z+p[12]).sin(),
+            p[13] + p[14]*x + p[15]*y + p[16]*z
+                  + p[17]*(p[18]*x+p[19]).sin() + p[20]*(p[21]*y+p[22]).sin() + p[23]*(p[24]*z+p[25]).sin(),
+            p[26] + p[27]*x + p[28]*y + p[29]*z
+                  + p[30]*(p[31]*x+p[32]).sin() + p[33]*(p[34]*y+p[35]).sin() + p[36]*(p[37]*z+p[38]).sin(),
+        )),
+        AttractorType::PolySprott => make_map_states(num, &config.params, poly_sprott_eval),
+    }
+}
+
+fn poly_sprott_eval(p: &[f32], x: f32, y: f32, z: f32) -> (f32, f32, f32) {
+    let order = if p.is_empty() { 2 } else { p[0].round() as usize };
+    let cx = if p.len() >= 57  { &p[1..57]   } else { &[] as &[f32] };
+    let cy = if p.len() >= 113 { &p[57..113]  } else { &[] as &[f32] };
+    let cz = if p.len() >= 169 { &p[113..169] } else { &[] as &[f32] };
+    (poly3d(cx, x, y, z, order), poly3d(cy, x, y, z, order), poly3d(cz, x, y, z, order))
+}
+
+fn poly3d(c: &[f32], x: f32, y: f32, z: f32, order: usize) -> f32 {
+    if c.len() < 10 { return 0.0; }
+    let x2 = x*x; let y2 = y*y; let z2 = z*z;
+    // Sprott ordering: 1, x, x², xy, xz, y, y², yz, z, z²
+    let mut r = c[0] + c[1]*x + c[2]*x2 + c[3]*(x*y) + c[4]*(x*z)
+              + c[5]*y + c[6]*y2 + c[7]*(y*z)
+              + c[8]*z + c[9]*z2;
+    if order >= 3 && c.len() >= 20 {
+        let x3 = x2*x; let y3 = y2*y; let z3 = z2*z;
+        r += c[10]*x3  + c[11]*(x2*y) + c[12]*(x2*z) + c[13]*(x*y2)
+           + c[14]*(x*y*z) + c[15]*(x*z2) + c[16]*y3 + c[17]*(y2*z)
+           + c[18]*(y*z2) + c[19]*z3;
+        if order >= 4 && c.len() >= 35 {
+            let x4 = x3*x; let y4 = y3*y; let z4 = z3*z;
+            r += c[20]*x4  + c[21]*(x3*y) + c[22]*(x3*z) + c[23]*(x2*y2)
+               + c[24]*(x2*y*z) + c[25]*(x2*z2) + c[26]*(x*y3) + c[27]*(x*y2*z)
+               + c[28]*(x*y*z2) + c[29]*(x*z3) + c[30]*y4 + c[31]*(y3*z)
+               + c[32]*(y2*z2) + c[33]*(y*z3) + c[34]*z4;
+            if order >= 5 && c.len() >= 56 {
+                let x5 = x4*x; let y5 = y4*y; let z5 = z4*z;
+                r += c[35]*x5   + c[36]*(x4*y)  + c[37]*(x4*z)  + c[38]*(x3*y2)
+                   + c[39]*(x3*y*z) + c[40]*(x3*z2) + c[41]*(x2*y3) + c[42]*(x2*y2*z)
+                   + c[43]*(x2*y*z2) + c[44]*(x2*z3) + c[45]*(x*y4) + c[46]*(x*y3*z)
+                   + c[47]*(x*y2*z2) + c[48]*(x*y*z3) + c[49]*(x*z4) + c[50]*y5
+                   + c[51]*(y4*z) + c[52]*(y3*z2) + c[53]*(y2*z3) + c[54]*(y*z4)
+                   + c[55]*z5;
+            }
+        }
+    }
+    r
+}
+
+/// Generate `num` initial Lorenz trajectory states spread across the attractor.
+/// Uses 32 warm-up groups with staggered ICs; adjacent samples 100 steps apart.
 fn make_lorenz_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
-    let a  = lorenz_param(params, 0);
-    let b  = lorenz_param(params, 1);
-    let c  = lorenz_param(params, 2);
-    let dt = lorenz_param(params, 3);
+    let a  = params.get(0).copied().unwrap_or(16.227);
+    let b  = params.get(1).copied().unwrap_or(15.223);
+    let c  = params.get(2).copied().unwrap_or(8.018);
+    let dt = params.get(3).copied().unwrap_or(0.049);
 
     let num_groups: u32 = 32;
     let per_group = (num + num_groups - 1) / num_groups;
-    const INTER_SAMPLE_STEPS: u32 = 100;
-
+    const INTER: u32 = 100;
     let mut states = Vec::with_capacity(num as usize);
 
     for g in 0..num_groups {
-        // Stagger starting ICs so each group begins in a different attractor region.
-        let (mut x, mut y, mut z) = (
-            0.1 + g as f32 * 0.7,
-            g as f32 * 1.3,
-            g as f32 * 2.1,
-        );
-
-        // Warm up to settle onto the attractor.
+        let (mut x, mut y, mut z) = (0.1 + g as f32 * 0.7, g as f32 * 1.3, g as f32 * 2.1);
         for _ in 0..1_000 {
-            let nx = x + a * dt * (y - x);
-            let ny = y + dt * (b * x - y - z * x);
-            let nz = z + dt * (x * y - c * z);
+            let (nx, ny, nz) = (
+                x + a * dt * (y - x),
+                y + dt * (b * x - y - z * x),
+                z + dt * (x * y - c * z),
+            );
             (x, y, z) = (nx, ny, nz);
         }
-
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
             states.push([x, y, z, 0.0]);
-            for _ in 0..INTER_SAMPLE_STEPS {
-                let nx = x + a * dt * (y - x);
-                let ny = y + dt * (b * x - y - z * x);
-                let nz = z + dt * (x * y - c * z);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + a * dt * (y - x),
+                    y + dt * (b * x - y - z * x),
+                    z + dt * (x * y - c * z),
+                );
                 (x, y, z) = (nx, ny, nz);
             }
         }
     }
     states
 }
+
+fn make_lorenz84_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.25);
+    let b  = params.get(1).copied().unwrap_or(4.0);
+    let f  = params.get(2).copied().unwrap_or(8.0);
+    let g  = params.get(3).copied().unwrap_or(1.0);
+    let dt = params.get(4).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    // Small jitter around a point inside the basin of attraction (~[-3,3]).
+    // 2000 steps × dt≈0.01 ≈ 20 time units — enough to land on the attractor.
+    for grp in 0..num_groups {
+        let (mut x, mut y, mut z) = (
+            0.1 + grp as f32 * 0.05,
+            grp as f32 * 0.1,
+            grp as f32 * 0.05,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * (-a * x - y * y - z * z + a * f),
+                y + dt * (-y + x * y - b * x * z + g),
+                z + dt * (-z + b * x * y + x * z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-a * x - y * y - z * z + a * f),
+                    y + dt * (-y + x * y - b * x * z + g),
+                    z + dt * (-z + b * x * y + x * z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
+fn make_rossler_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.2);
+    let b  = params.get(1).copied().unwrap_or(0.2);
+    let c  = params.get(2).copied().unwrap_or(5.7);
+    let dt = params.get(3).copied().unwrap_or(0.05);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    // Keep starting points within the attractor basin (x∈[-9,11], y∈[-10,5]).
+    // Offsets grp*0.25 → max x=7.75; grp*0.1 → max y=3.1.
+    // 1000 steps × dt≈0.05 ≈ 50 time units ≈ 8 Rössler periods — enough to settle.
+    for grp in 0..num_groups {
+        let (mut x, mut y, mut z) = (grp as f32 * 0.25, grp as f32 * 0.1, 0.1);
+        for _ in 0..1000 {
+            let (nx, ny, nz) = (
+                x + dt * (-y - z),
+                y + dt * (x + a * y),
+                z + dt * (b + z * (x - c)),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-y - z),
+                    y + dt * (x + a * y),
+                    z + dt * (b + z * (x - c)),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
+fn make_thomas_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    let b  = params.get(0).copied().unwrap_or(0.208);
+    let dt = params.get(1).copied().unwrap_or(0.05);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let (mut x, mut y, mut z) = (
+            0.1 + grp as f32 * 0.4,
+            grp as f32 * 0.6,
+            grp as f32 * 0.2,
+        );
+        for _ in 0..500 {
+            let (nx, ny, nz) = (
+                x + dt * (-b * x + y.sin()),
+                y + dt * (-b * y + z.sin()),
+                z + dt * (-b * z + x.sin()),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-b * x + y.sin()),
+                    y + dt * (-b * y + z.sin()),
+                    z + dt * (-b * z + x.sin()),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
+fn make_map_states_icon(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    let degree = params.get(0).copied().unwrap_or(3.0).max(1.0) as u32;
+    let (alpha, beta, lambda, gamma, omega) = (
+        params.get(1).copied().unwrap_or(-2.08),
+        params.get(2).copied().unwrap_or(0.4),
+        params.get(3).copied().unwrap_or(0.04),
+        params.get(4).copied().unwrap_or(0.1),
+        params.get(5).copied().unwrap_or(0.0),
+    );
+    let icon_step = |x: f32, y: f32| -> (f32, f32, f32) {
+        let (mut re_r, mut im_r) = (1.0f32, 0.0f32);
+        let (mut re_prev, mut im_prev) = (1.0f32, 0.0f32);
+        for _ in 0..degree {
+            re_prev = re_r; im_prev = im_r;
+            let nr = re_r * x - im_r * y;
+            let ni = re_r * y + im_r * x;
+            re_r = nr; im_r = ni;
+        }
+        let r_sq = x * x + y * y;
+        let p = lambda + alpha * r_sq + beta * re_r;
+        (
+            p * x + gamma * re_prev + omega * im_prev,
+            p * y + omega * re_prev - gamma * im_prev,
+            r_sq.sqrt(),
+        )
+    };
+
+    // Standard Field-Golubitsky: equilibrium at R^2 = (1-lambda)/alpha
+    let rhs = if alpha.abs() > 1e-6 { (1.0 - lambda) / alpha } else { 0.0 };
+    let r_eq = if rhs > 0.0 { rhs.sqrt().clamp(0.01, 2.0) } else { 0.5_f32 };
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 50;
+    const WARM: u32 = 500;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let (mut x, mut y) = (r_eq + grp as f32 * 0.01, grp as f32 * 0.005);
+        let mut z = 0.0f32;
+        for _ in 0..WARM {
+            let (nx, ny, nz) = icon_step(x, y);
+            if nx.is_finite() && ny.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            } else {
+                (x, y, z) = (r_eq, 0.0, 0.0);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = icon_step(x, y);
+                if nx.is_finite() && ny.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
+fn make_map_states_icon_b(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    let degree = params.get(0).copied().unwrap_or(2.0).max(1.0) as u32;
+    let (alpha, beta, lambda, gamma, omega) = (
+        params.get(1).copied().unwrap_or(-1.715),
+        params.get(2).copied().unwrap_or(-0.689),
+        params.get(3).copied().unwrap_or(2.343),
+        params.get(4).copied().unwrap_or(0.351),
+        params.get(5).copied().unwrap_or(-0.428),
+    );
+    let icon_b_step = |x: f32, y: f32| -> (f32, f32, f32) {
+        let (mut re_r, mut im_r) = (1.0f32, 0.0f32);
+        for _ in 0..degree {
+            let nr = re_r * x - im_r * y;
+            let ni = re_r * y + im_r * x;
+            re_r = nr; im_r = ni;
+        }
+        let norm_v = (x * x + y * y).sqrt();
+        let p = lambda + alpha * norm_v + beta * (x * re_r - y * im_r);
+        (
+            p * x + gamma * re_r - omega * y,
+            p * y - gamma * im_r + omega * x,
+            norm_v,
+        )
+    };
+
+    // Equilibrium radius: λ + α·R = 1  →  R = (1-λ)/α
+    let rhs = if alpha.abs() > 1e-6 { (1.0 - lambda) / alpha } else { 0.0 };
+    let r_eq = if rhs > 0.0 { rhs.clamp(0.01, 2.0) } else { 0.5_f32 };
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 50;
+    const WARM: u32 = 500;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let (mut x, mut y) = (r_eq + grp as f32 * 0.01, grp as f32 * 0.005);
+        let mut z = 0.0f32;
+        for _ in 0..WARM {
+            let (nx, ny, nz) = icon_b_step(x, y);
+            if nx.is_finite() && ny.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            } else {
+                (x, y, z) = (r_eq, 0.0, 0.0);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = icon_b_step(x, y);
+                if nx.is_finite() && ny.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
+/// Extract a seed (a known-good point on the attractor) from a state list.
+/// Uses the midpoint of the list so it is well past any transient.
+fn seed_from_states(states: &[[f32; 4]]) -> [f32; 3] {
+    let s = states.get(states.len() / 2).copied().unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    [s[0], s[1], s[2]]
+}
+
+/// Probe a set of candidate initial conditions for `f`, running up to `WARM` steps
+/// each, and return the endpoint of whichever candidate survives the longest.
+/// This handles attractors whose basin of attraction does not include the origin.
+fn probe_map_seed<F>(f: &F, params: &[f32]) -> (f32, f32, f32)
+where
+    F: Fn(&[f32], f32, f32, f32) -> (f32, f32, f32),
+{
+    const WARM: u32 = 500;
+    // Candidates span a range of z values and a few off-axis points so that
+    // attractors elevated away from z=0 are reliably found.
+    const CANDIDATES: &[(f32, f32, f32)] = &[
+        (0.1, 0.1, 0.0), (0.1, 0.1, 0.5), (0.1, 0.1, 1.0),
+        (0.1, 0.1, 1.5), (0.1, 0.1, 2.0), (0.1, 0.1, 2.5),
+        (0.5, 0.5, 0.0), (0.5, 0.5, 0.5), (0.5, 0.5, 1.0),
+        (0.5, 0.5, 1.5), (0.5, 0.5, 2.0),
+        (-0.3, 0.5, 0.5), (0.5, -0.3, 0.5), (0.5, 0.5, -0.5),
+    ];
+    let mut best = (0.1_f32, 0.1, 0.1);
+    let mut best_count = 0u32;
+    for &(cx, cy, cz) in CANDIDATES {
+        let (mut x, mut y, mut z) = (cx, cy, cz);
+        let mut count = 0u32;
+        for _ in 0..WARM {
+            let (nx, ny, nz) = f(params, x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        if count > best_count {
+            best_count = count;
+            best = (x, y, z);
+        }
+        if count >= WARM {
+            break; // Found a fully-bounded IC; no need to try more
+        }
+    }
+    best
+}
+
+/// Generic state generator for discrete maps.
+/// Probes multiple initial conditions to find one inside the basin of attraction,
+/// then generates `num` states spaced 50 steps apart along the attractor.
+fn make_map_states<F>(num: u32, params: &[f32], f: F) -> Vec<[f32; 4]>
+where
+    F: Fn(&[f32], f32, f32, f32) -> (f32, f32, f32),
+{
+    const INTER: u32 = 50;
+    let (mut x, mut y, mut z) = probe_map_seed(&f, params);
+    let mut states = Vec::with_capacity(num as usize);
+    while states.len() < num as usize {
+        states.push([x, y, z, 0.0]);
+        for _ in 0..INTER {
+            let (nx, ny, nz) = f(params, x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+    }
+    states
+}
+
+fn make_chaotic_flow_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+    // Layout: [0..11]=m0..m11, [12..14]=Op0..Op2, [15..17]=Op4..Op6,
+    //         [18..20]=Op8..Op10, [21]=dt  (m3, m7, m11 are always constant)
+    let get = |i: usize| params.get(i).copied().unwrap_or(0.0);
+    let m   = |i: usize| get(i);
+    let op  = |i: usize| get(12 + i) as u32;  // i=0..8 maps to Op0,Op1,Op2,Op4,Op5,Op6,Op8,Op9,Op10
+    let dt  = get(21).max(1e-6_f32);
+
+    let eval_v = |o: u32, x: f32, y: f32, z: f32| -> f32 {
+        match o { 1 => x, 2 => y, 3 => z, _ => 1.0 }
+    };
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = m(0)*eval_v(op(0),x,y,z)*x + m(1)*eval_v(op(1),x,y,z)*y
+               + m(2)*eval_v(op(2),x,y,z)*z + m(3);
+        let dy = m(4)*eval_v(op(3),x,y,z)*x + m(5)*eval_v(op(4),x,y,z)*y
+               + m(6)*eval_v(op(5),x,y,z)*z + m(7);
+        let dz = m(8)*eval_v(op(6),x,y,z)*x + m(9)*eval_v(op(7),x,y,z)*y
+               + m(10)*eval_v(op(8),x,y,z)*z + m(11);
+        (x + dt*dx, y + dt*dy, z + dt*dz)
+    };
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 50;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        // Start near a mid-range point; 1000 steps at the param dt lands on the attractor.
+        let (mut x, mut y, mut z) = (
+            grp as f32 * 0.05,
+            0.1 + grp as f32 * 0.05,
+            grp as f32 * 0.03,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            } else {
+                (x, y, z) = (0.0, 0.1 + grp as f32 * 0.05, 0.0);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, 0.0]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
+            }
+        }
+    }
+    states
+}
+
 
 // ---------------------------------------------------------------------------
 // Bind group layout entry helpers
