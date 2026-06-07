@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: strange-attractor.exe
+            zip: strange-attractor-windows-x64.zip
+
+          - os: macos-latest        # Apple Silicon (M-series)
+            target: aarch64-apple-darwin
+            bin: strange-attractor
+            zip: strange-attractor-macos-arm64.zip
+
+          - os: macos-13            # Intel x86
+            target: x86_64-apple-darwin
+            bin: strange-attractor
+            zip: strange-attractor-macos-x64.zip
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: strange-attractor
+            zip: strange-attractor-linux-x64.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # winit 0.30 needs wayland and xkbcommon headers to compile on Linux
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
+
+      - name: Build
+        run: cargo build --release --bin strange-attractor --target ${{ matrix.target }}
+
+      # Wrap binary in a minimal .app bundle so macOS Finder can launch it
+      - name: Bundle macOS .app
+        if: runner.os == 'macOS'
+        run: |
+          APP="Strange Attractor.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$APP/Contents/MacOS/"
+          cat > "$APP/Contents/Info.plist" << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key>       <string>strange-attractor</string>
+            <key>CFBundleIdentifier</key>       <string>com.cwendel.strange-attractor</string>
+            <key>CFBundleName</key>             <string>Strange Attractor</string>
+            <key>CFBundlePackageType</key>      <string>APPL</string>
+            <key>NSHighResolutionCapable</key>  <true/>
+            <key>NSPrincipalClass</key>         <string>NSApplication</string>
+          </dict></plist>
+          EOF
+          zip -r "${{ matrix.zip }}" "$APP"
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.bin }}" -DestinationPath "${{ matrix.zip }}"
+
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        run: zip "${{ matrix.zip }}" "target/${{ matrix.target }}/release/${{ matrix.bin }}"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.zip }}
+          generate_release_notes: true
