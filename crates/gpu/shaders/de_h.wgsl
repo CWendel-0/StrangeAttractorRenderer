@@ -24,8 +24,8 @@ struct CompositeParams {
     max_sigma:       f32,
     min_sigma:       f32,
     ss_scale:        u32,
-    _pad0:           u32,
-    _pad1:           u32,
+    blend_mode:      u32,
+    max_speed_enc:   u32,
 }
 
 @group(0) @binding(0) var<storage, read> accum  : array<u32>;
@@ -67,33 +67,71 @@ fn block_density(dpx: i32, dpy: i32) -> f32 {
     return total / WEIGHT_SCALE;
 }
 
+fn block_speed(dpx: i32, dpy: i32) -> f32 {
+    if dpx < 0 || dpy < 0 || u32(dpx) >= params.width || u32(dpy) >= params.height {
+        return 0.0;
+    }
+    let ssx = u32(dpx) * params.ss_scale;
+    let ssy = u32(dpy) * params.ss_scale;
+    var total = 0.0f;
+    for (var dy = 0u; dy < params.ss_scale; dy++) {
+        for (var dx = 0u; dx < params.ss_scale; dx++) {
+            total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u + 1u]);
+        }
+    }
+    return total / WEIGHT_SCALE;
+}
+
 @fragment
-fn fs_main(in: VertOut) -> @location(0) f32 {
+fn fs_main(in: VertOut) -> @location(0) vec2<f32> {
     let px = u32(in.uv.x * f32(params.width));
     let py = u32((1.0 - in.uv.y) * f32(params.height));
     if px >= params.width || py >= params.height {
-        return 0.0;
+        return vec2<f32>(0.0, 0.0);
     }
 
     let x = i32(px);
     let y = i32(py);
 
-    if params.log_max_density <= 0.0 { return 0.0; }
+    if params.log_max_density <= 0.0 { return vec2<f32>(0.0, 0.0); }
 
-    let centre = block_density(x, y);
-    let sigma  = clamp(params.max_sigma / pow(centre + 1.0, 0.25), params.min_sigma, params.max_sigma);
-    let inv_s2 = 0.5 / (sigma * sigma);
-    let radius = min(i32(ceil(sigma * 3.0)), MAX_RADIUS);
+    // 3-point horizontal average so isolated speckle peaks don't suppress their own blur kernel.
+    let centre = (block_density(x - 1, y) + block_density(x, y) + block_density(x + 1, y)) / 3.0;
+    // Density-relative sigma: sparse pixels get max_sigma, the densest pixel gets min_sigma.
+    // Scales automatically as the render accumulates — more samples → lower sigma everywhere.
+    let density_01   = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
+    let sigma        = mix(params.max_sigma, params.min_sigma, density_01);
+    // Speed channel floored at 1.5 px so fine-grain speed noise stays blurred.
+    let speed_sigma  = max(sigma, 1.5);
+    let inv_s2       = 0.5 / (sigma * sigma);
+    let speed_inv_s2 = 0.5 / (speed_sigma * speed_sigma);
+    let radius       = min(i32(ceil(sigma * 3.0)),       MAX_RADIUS);
+    let speed_radius = min(i32(ceil(speed_sigma * 3.0)), MAX_RADIUS);
 
-    // Blur log-mapped values so sparse pixels stay dark even after blurring.
-    var weighted = 0.0;
-    var total_w  = 0.0;
-    for (var dx = -radius; dx <= radius; dx++) {
-        let d     = block_density(x + dx, y);
-        let log_d = log(d + 1.0) / params.log_max_density;
-        let w     = exp(-f32(dx * dx) * inv_s2);
-        weighted += log_d * w;
-        total_w  += w;
+    let max_s = max(f32(params.max_speed_enc), 1.0);
+
+    // Horizontal blur — density and speed use separate kernels.
+    // Loop over the wider speed radius; density only accumulates within its own radius.
+    var weighted_d = 0.0;
+    var weighted_s = 0.0;
+    var total_w_d  = 0.0;
+    var total_w_s  = 0.0;
+    for (var dx = -speed_radius; dx <= speed_radius; dx++) {
+        let d      = block_density(x + dx, y);
+        let spd    = block_speed(x + dx, y);
+        let log_d  = log(d + 1.0) / params.log_max_density;
+        let mean_s = select(0.0, spd / d * 256.0 / max_s, d > 1e-3);
+        let w_s    = exp(-f32(dx * dx) * speed_inv_s2);
+        weighted_s += mean_s * w_s;
+        total_w_s  += w_s;
+        if abs(dx) <= radius {
+            let w_d = exp(-f32(dx * dx) * inv_s2);
+            weighted_d += log_d * w_d;
+            total_w_d  += w_d;
+        }
     }
-    return weighted / max(total_w, 1e-6);
+    return vec2<f32>(
+        weighted_d / max(total_w_d, 1e-6),
+        clamp(weighted_s / max(total_w_s, 1e-6), 0.0, 1.0),
+    );
 }

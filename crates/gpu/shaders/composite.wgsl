@@ -2,8 +2,8 @@
 // followed by brightness scaling and gamma correction.
 //
 // de_h_tex contains horizontally-blurred LOG-DENSITY values (already tone-mapped).
-// Re-derives sigma from the original raw density so both passes use the same
-// kernel width. Only gamma is applied here — log was applied in the horizontal pass.
+// Re-derives sigma from the original raw density so both passes use the same kernel width.
+// Sigma formula matches de_h.wgsl: density-relative, 3-point neighbourhood average.
 
 // Must match WEIGHT_SCALE in main.rs, sim.wgsl, and de_h.wgsl.
 const WEIGHT_SCALE: f32 = 1024.0;
@@ -21,8 +21,8 @@ struct CompositeParams {
     max_sigma:       f32,
     min_sigma:       f32,
     ss_scale:        u32,
-    _pad0:           u32,
-    _pad1:           u32,
+    blend_mode:      u32,
+    max_speed_enc:   u32,
 }
 
 // de_h_tex: the R32Float intermediate written by the horizontal pass.
@@ -82,10 +82,11 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let x = i32(px);
     let y = i32(py);
 
-    // Sigma from original density — identical formula to the horizontal pass,
-    // so both passes share the same kernel width (correct separable Gaussian).
-    let centre = block_density(x, y);
-    let sigma  = clamp(params.max_sigma / pow(centre + 1.0, 0.25), params.min_sigma, params.max_sigma);
+    // 3-point vertical average so speckle peaks don't suppress their own blur kernel.
+    let centre = (block_density(x, y - 1) + block_density(x, y) + block_density(x, y + 1)) / 3.0;
+    // Density-relative sigma: matches the horizontal pass formula.
+    let density_01 = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
+    let sigma      = mix(params.max_sigma, params.min_sigma, density_01);
     let inv_s2 = 0.5 / (sigma * sigma);
     let radius = min(i32(ceil(sigma * 3.0)), MAX_RADIUS);
 
@@ -103,7 +104,10 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         total_w  += w;
     }
     // de_h_tex values are already log-mapped to [0,1]; brightness scales the output.
-    let blurred_log = weighted / max(total_w, 1e-6);
-    let v = clamp(pow(clamp(blurred_log, 0.0, 1.0), 1.0 / params.gamma) * params.brightness, 0.0, 1.0);
+    // Multiply by density_01 again: changes curve from density^(1/γ) to density^(1+1/γ),
+    // so isolated sparse pixels fade to near-black rather than appearing at ~30% brightness.
+    let blurred_log  = weighted / max(total_w, 1e-6);
+    let brightness01 = clamp(blurred_log, 0.0, 1.0);
+    let v = clamp(pow(brightness01, 1.0 / params.gamma) * brightness01 * params.brightness, 0.0, 1.0);
     return vec4<f32>(v, v, v, 1.0);
 }

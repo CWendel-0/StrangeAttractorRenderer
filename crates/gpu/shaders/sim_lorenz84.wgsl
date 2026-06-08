@@ -19,7 +19,7 @@ struct SimParams {
 
 @group(0) @binding(0) var<storage, read_write> states:      array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read_write> accum:       array<atomic<u32>>;
-@group(0) @binding(2) var<storage, read_write> max_density: atomic<u32>;
+@group(0) @binding(2) var<storage, read_write> max_vals: array<atomic<u32>, 2>;
 @group(0) @binding(3) var<uniform>             params:      SimParams;
 
 const WEIGHT_SCALE: f32 = 1024.0;
@@ -33,7 +33,7 @@ fn splat_pixel(px: i32, py: i32, weight: u32, speed_contrib: u32) {
     let base = (upy * params.ss_width + upx) * 2u;
     if atomicLoad(&accum[base]) < 0x7FFFFFFFu {
         let prev = atomicAdd(&accum[base], weight);
-        atomicMax(&max_density, prev + weight);
+        atomicMax(&max_vals[0], prev + weight);
     }
     if atomicLoad(&accum[base + 1u]) < 0x7FFFFFFFu {
         atomicAdd(&accum[base + 1u], speed_contrib);
@@ -78,6 +78,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         let speed_raw = length(vec3<f32>(vx, vy, vz));
         let speed_enc = min(u32(log(speed_raw + 1.0) * 32.0), 255u);
+        atomicMax(&max_vals[1], speed_enc);
 
         let clip = params.view_proj * vec4<f32>(x, y, z, 1.0);
         if clip.w <= 0.0 { continue; }

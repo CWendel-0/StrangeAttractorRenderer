@@ -44,8 +44,8 @@ impl UiState {
             attractor:  AttractorConfig::new(AttractorType::default()),
             brightness: 1.0,
             gamma:      2.2,
-            max_sigma:  1.5,
-            min_sigma:  0.1,
+            max_sigma:  5.0,
+            min_sigma:  0.3,
             ss_scale:   2,
             dirty:            false,
             type_changed:     false,
@@ -246,7 +246,7 @@ impl UiState {
                 ui.horizontal(|ui| {
                     let was = self.render_mode;
                     ui.selectable_value(&mut self.render_mode, RenderMode::Monochrome, "Monochrome");
-                    ui.selectable_value(&mut self.render_mode, RenderMode::Light, "Light");
+                    ui.selectable_value(&mut self.render_mode, RenderMode::Light, "Colorful");
                     if self.render_mode != was {
                         self.dirty = true;
                     }
@@ -269,12 +269,12 @@ impl UiState {
                 ui.separator();
                 ui.label("Blur (Density Estimation)");
                 ui.add(
-                    egui::Slider::new(&mut self.max_sigma, 0.1..=5.0)
+                    egui::Slider::new(&mut self.max_sigma, 0.5..=15.0)
                         .text("Max blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.min_sigma, 0.1..=3.0)
+                    egui::Slider::new(&mut self.min_sigma, 0.1..=5.0)
                         .text("Min blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );

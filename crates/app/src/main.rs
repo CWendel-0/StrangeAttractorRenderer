@@ -134,6 +134,9 @@ struct App {
 
     lyapunov_worker:  Option<LyapunovWorker>,
     lyapunov_metrics: Option<(f32, f32)>,
+
+    frames_accumulated: u32,
+    reseed_count:       u32,
 }
 
 impl App {
@@ -153,6 +156,8 @@ impl App {
             searching:     false,
             lyapunov_worker:  None,
             lyapunov_metrics: None,
+            frames_accumulated: 0,
+            reseed_count:       0,
         }
     }
 }
@@ -367,6 +372,7 @@ impl App {
         }
 
         if self.camera.dirty {
+            gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
             self.pending_clear = true;
             self.camera.dirty = false;
         }
@@ -378,6 +384,18 @@ impl App {
         }
 
         gpu.histogram.poll_max_density(&gpu.device);
+
+        // Periodic reseed: every ~30 s inject a new set of 8 192 uniformly-sampled
+        // positions into the live trajectories without clearing the accumulator.
+        // Each reseed uses a different phase offset so the new positions are always
+        // distinct from the previous batch (512 × phase >> Lyapunov time for all
+        // built-in attractors, giving statistically independent samples).
+        const RESEED_INTERVAL: u32 = 200; // ~30 s at 60 fps
+        self.frames_accumulated = if self.pending_clear { 0 } else { self.frames_accumulated + 1 };
+        if self.frames_accumulated > 0 && self.frames_accumulated % RESEED_INTERVAL == 0 {
+            gpu.histogram.reseed_trajectories(&gpu.queue, &ui.attractor, self.reseed_count);
+            self.reseed_count = self.reseed_count.wrapping_add(1);
+        }
 
         // ---- GPU frame ----
         let frame = match gpu.surface.get_current_texture() {
@@ -422,7 +440,7 @@ impl App {
                 min_sigma:       ui.min_sigma,
                 ss_scale:        ss,
                 blend_mode:      ui.blend_mode.as_u32(),
-                _pad1:           0,
+                max_speed_enc:   gpu.histogram.last_max_speed,
             },
             ui.render_mode,
         );

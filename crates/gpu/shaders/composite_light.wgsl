@@ -25,7 +25,7 @@ struct CompositeParams {
     min_sigma:       f32,
     ss_scale:        u32,
     blend_mode:      u32,
-    _pad1:           u32,
+    max_speed_enc:   u32,
 }
 
 @group(0) @binding(0) var de_h_tex             : texture_2d<f32>;
@@ -70,22 +70,6 @@ fn block_density(dpx: i32, dpy: i32) -> f32 {
     return total / WEIGHT_SCALE;
 }
 
-// Sum the speed channel (accum[base*2+1]) over the ss_scale² block for display pixel (dpx, dpy).
-fn block_speed(dpx: i32, dpy: i32) -> f32 {
-    if dpx < 0 || dpy < 0 || u32(dpx) >= params.width || u32(dpy) >= params.height {
-        return 0.0;
-    }
-    let ssx = u32(dpx) * params.ss_scale;
-    let ssy = u32(dpy) * params.ss_scale;
-    var total = 0.0f;
-    for (var dy = 0u; dy < params.ss_scale; dy++) {
-        for (var dx = 0u; dx < params.ss_scale; dx++) {
-            total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u + 1u]);
-        }
-    }
-    return total / WEIGHT_SCALE;
-}
-
 // Sample a 256×1 gradient texture at t ∈ [0, 1] using a linear sampler.
 fn sample_grad(tex: texture_2d<f32>, t: f32) -> vec3<f32> {
     return textureSample(tex, grad_sampler, vec2<f32>(clamp(t, 0.0, 1.0), 0.5)).rgb;
@@ -106,40 +90,48 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let x = i32(px);
     let y = i32(py);
 
-    // Sigma from raw density — same formula as horizontal pass so kernel widths match.
-    let centre = block_density(x, y);
-    let sigma  = clamp(params.max_sigma / pow(centre + 1.0, 0.25), params.min_sigma, params.max_sigma);
-    let inv_s2 = 0.5 / (sigma * sigma);
-    let radius = min(i32(ceil(sigma * 3.0)), MAX_RADIUS);
+    // 3-point vertical average so speckle peaks don't suppress their own blur kernel.
+    let centre       = (block_density(x, y - 1) + block_density(x, y) + block_density(x, y + 1)) / 3.0;
+    // Density-relative sigma: matches the horizontal pass formula.
+    let density_01   = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
+    let sigma        = mix(params.max_sigma, params.min_sigma, density_01);
+    let speed_sigma  = max(sigma, 1.5);
+    let inv_s2       = 0.5 / (sigma * sigma);
+    let speed_inv_s2 = 0.5 / (speed_sigma * speed_sigma);
+    let radius       = min(i32(ceil(sigma * 3.0)),       MAX_RADIUS);
+    let speed_radius = min(i32(ceil(speed_sigma * 3.0)), MAX_RADIUS);
 
-    // Vertical 1D Gaussian over the horizontally-blurred log-density intermediate.
-    var weighted = 0.0;
-    var total_w  = 0.0;
-    for (var dy = -radius; dy <= radius; dy++) {
+    // Vertical 1D Gaussian — density and speed use separate kernels (same floor logic as de_h).
+    var weighted     = 0.0;
+    var weighted_spd = 0.0;
+    var total_w      = 0.0;
+    var total_w_s    = 0.0;
+    for (var dy = -speed_radius; dy <= speed_radius; dy++) {
         let row = y + dy;
         var d = 0.0;
+        var s = 0.0;
         if row >= 0 && u32(row) < params.height {
-            d = textureLoad(de_h_tex, vec2<i32>(x, row), 0).r;
+            let tex = textureLoad(de_h_tex, vec2<i32>(x, row), 0);
+            d = tex.r;
+            s = tex.g;
         }
-        let w = exp(-f32(dy * dy) * inv_s2);
-        weighted += d * w;
-        total_w  += w;
+        let w_s = exp(-f32(dy * dy) * speed_inv_s2);
+        weighted_spd += s * w_s;
+        total_w_s    += w_s;
+        if abs(dy) <= radius {
+            let w = exp(-f32(dy * dy) * inv_s2);
+            weighted += d * w;
+            total_w  += w;
+        }
     }
-    // blurred_log is already in [0, 1] (log-mapped by the horizontal pass).
-    let blurred_log = weighted / max(total_w, 1e-6);
+    let blurred_log   = weighted     / max(total_w, 1e-6);
+    let mean_speed_01 = clamp(weighted_spd / max(total_w_s, 1e-6), 0.0, 1.0);
 
-    // Gradient A: sample by log-density across the full gradient range.
-    // brightness is applied after blending so it never clips the gradient lookup.
-    let density_01 = clamp(blurred_log, 0.0, 1.0);
-    let col_a = sample_grad(gradient_a, density_01);
-
-    // Gradient B: sample by mean speed.
-    // block_speed / block_density = weighted-mean(speed_enc) / 256  ∈ [0, 1)
-    // because speed_enc = min(u32(log(speed+1)*32), 255u) and contribution is /256.
-    let raw_density = block_density(x, y);
-    let raw_speed   = block_speed(x, y);
-    let mean_speed_01 = select(0.0, raw_speed / raw_density, raw_density > 1e-3);
-    let col_b = sample_grad(gradient_b, clamp(mean_speed_01, 0.0, 1.0));
+    // Gradient A: sample by log-density; Gradient B: sample by mean speed.
+    // Both are fully DE-blurred (horizontal + vertical Gaussian).
+    let grad_density_01 = clamp(blurred_log, 0.0, 1.0);
+    let col_a = sample_grad(gradient_a, grad_density_01);
+    let col_b = sample_grad(gradient_b, mean_speed_01);
 
     // Blend col_a (density) and col_b (speed) according to params.blend_mode.
     // Photoshop convention: col_a = base layer, col_b = blend layer.
@@ -178,6 +170,7 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         }
     }
 
+    // Fade by density_01: isolated sparse pixels approach background rather than ~30% brightness.
     let v = pow(clamp(blended * params.brightness, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / params.gamma));
-    return vec4<f32>(v, 1.0);
+    return vec4<f32>(v * grad_density_01, 1.0);
 }

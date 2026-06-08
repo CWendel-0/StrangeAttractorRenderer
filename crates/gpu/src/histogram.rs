@@ -22,8 +22,8 @@ const SIM_STEPS_PER_DISPATCH: u32 = 512;
 /// Composite HDR intermediate (luma before swapchain blit).
 const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// Horizontal DE pass intermediate (raw blurred density, one f32 per pixel).
-const DE_H_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float;
+/// Horizontal DE pass intermediate: .r = blurred log-density, .g = blurred mean speed (both [0,1]).
+const DE_H_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Float;
 
 /// Width (in texels) of the 1D gradient textures (256×1 Rgba8Unorm).
 const GRADIENT_TEX_WIDTH: u32 = 256;
@@ -120,7 +120,7 @@ pub struct CompositeParams {
     pub min_sigma:       f32,
     pub ss_scale:        u32,
     pub blend_mode:      u32,  // BlendMode::as_u32(); only used by composite_light.wgsl
-    pub _pad1:           u32,
+    pub max_speed_enc:   u32,  // max speed_enc seen this frame; used by composite_light to normalize gradient B
 }
 
 // ---------------------------------------------------------------------------
@@ -173,12 +173,13 @@ pub struct Histogram {
     hdr_texture:      wgpu::Texture,
     hdr_texture_view: wgpu::TextureView,
 
-    // ---- GPU max-density readback ----
+    // ---- GPU max-density / max-speed readback ----
     max_density_buf:  wgpu::Buffer,
     max_readback_buf: wgpu::Buffer,
     max_map_ready:    Arc<AtomicBool>,
     max_map_inflight: bool,
     pub last_max_density: u32,
+    pub last_max_speed:   u32,
 
     // ---- cached bind groups ----
     cached_de_h_bg:            wgpu::BindGroup,
@@ -214,7 +215,7 @@ impl Histogram {
 
         let max_density_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label:              Some("max_density_buf"),
-            size:               4,
+            size:               8, // [0]=max_density, [1]=max_speed_enc
             usage:              wgpu::BufferUsages::STORAGE
                               | wgpu::BufferUsages::COPY_SRC
                               | wgpu::BufferUsages::COPY_DST,
@@ -223,7 +224,7 @@ impl Histogram {
 
         let max_readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label:              Some("max_readback_buf"),
-            size:               4,
+            size:               8,
             usage:              wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -275,7 +276,7 @@ impl Histogram {
         });
 
         // Upload initial trajectory states spread across the attractor.
-        let initial_states = make_attractor_states(SIM_NUM_TRAJECTORIES, initial_config);
+        let initial_states = make_attractor_states(SIM_NUM_TRAJECTORIES, initial_config, 0, 0);
         let initial_seed = seed_from_states(&initial_states);
         queue.write_buffer(&sim_state_buf, 0, bytemuck::cast_slice(&initial_states));
 
@@ -610,6 +611,7 @@ impl Histogram {
             max_map_ready: Arc::new(AtomicBool::new(false)),
             max_map_inflight: false,
             last_max_density: 1,
+            last_max_speed:   1,
             cached_sim_bg,
             cached_de_h_bg,
             cached_composite_bg,
@@ -902,7 +904,21 @@ impl Histogram {
     /// Reinitialise all trajectory states with fresh ICs spread across the attractor.
     /// Call this when attractor type or parameters change.
     pub fn reset_sim_states(&self, queue: &wgpu::Queue, config: &AttractorConfig) {
-        let states = make_attractor_states(SIM_NUM_TRAJECTORIES, config);
+        let states = make_attractor_states(SIM_NUM_TRAJECTORIES, config, 0, 0);
+        self.attractor_seed.set(seed_from_states(&states));
+        queue.write_buffer(&self.sim_state_buf, 0, bytemuck::cast_slice(&states));
+    }
+
+    /// Re-seed trajectories at a different phase of the attractor without clearing
+    /// the accumulator. `phase` selects a distinct section of the attractor so each
+    /// call adds genuinely new positions to the existing accumulation mix.
+    pub fn reseed_trajectories(&self, queue: &wgpu::Queue, config: &AttractorConfig, phase: u32) {
+        // 512 steps is orders of magnitude past the Lyapunov time for any built-in
+        // attractor, so each phase gives statistically independent sample positions.
+        // Cap at 16 384 to bound CPU time (~2 ms worst case for 32 groups).
+        let extra_steps = (phase as u64 * 512).min(16_384);
+        let rng_seed = phase.wrapping_add(1).wrapping_mul(2654435761u32);
+        let states = make_attractor_states(SIM_NUM_TRAJECTORIES, config, extra_steps, rng_seed);
         self.attractor_seed.set(seed_from_states(&states));
         queue.write_buffer(&self.sim_state_buf, 0, bytemuck::cast_slice(&states));
     }
@@ -955,6 +971,7 @@ impl Histogram {
         encoder.clear_buffer(&self.accum_buf, 0, None);
         encoder.clear_buffer(&self.max_density_buf, 0, None);
         self.last_max_density = 1;
+        self.last_max_speed   = 1;
         // Do NOT touch max_map_inflight / max_map_ready here.
     }
 
@@ -1038,7 +1055,7 @@ impl Histogram {
 
     pub fn encode_max_readback(&self, encoder: &mut wgpu::CommandEncoder) {
         if self.max_map_inflight { return; }
-        encoder.copy_buffer_to_buffer(&self.max_density_buf, 0, &self.max_readback_buf, 0, 4);
+        encoder.copy_buffer_to_buffer(&self.max_density_buf, 0, &self.max_readback_buf, 0, 8);
     }
 
     pub fn submit_max_readback(&mut self) {
@@ -1055,12 +1072,14 @@ impl Histogram {
         device.poll(wgpu::Maintain::Poll);
         if self.max_map_ready.load(Ordering::Acquire) {
             let range = self.max_readback_buf.slice(..).get_mapped_range();
-            let val = u32::from_le_bytes([range[0], range[1], range[2], range[3]]);
+            let density = u32::from_le_bytes([range[0], range[1], range[2], range[3]]);
+            let speed   = u32::from_le_bytes([range[4], range[5], range[6], range[7]]);
             drop(range);
             self.max_readback_buf.unmap();
             self.max_map_ready.store(false, Ordering::Release);
             self.max_map_inflight = false;
-            if val > 0 { self.last_max_density = val; }
+            if density > 0 { self.last_max_density = density; }
+            if speed   > 0 { self.last_max_speed   = speed;   }
         }
     }
 }
@@ -1098,48 +1117,49 @@ fn make_sim_pipeline(
 // CPU-side attractor state initialisation
 // ---------------------------------------------------------------------------
 
-fn make_attractor_states(num: u32, config: &AttractorConfig) -> Vec<[f32; 4]> {
+fn make_attractor_states(num: u32, config: &AttractorConfig, extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let p = &config.params;
     match config.attractor_type {
-        AttractorType::Lorenz      => make_lorenz_states(num, &config.params),
-        AttractorType::Lorenz84    => make_lorenz84_states(num, &config.params),
-        AttractorType::Rossler     => make_rossler_states(num, &config.params),
-        AttractorType::Thomas      => make_thomas_states(num, &config.params),
-        AttractorType::ChaoticFlow => make_chaotic_flow_states(num, &config.params),
-        AttractorType::Pickover    => make_map_states(num, &config.params, |p, x, y, z| {
+        AttractorType::Lorenz      => make_lorenz_states(num, p, extra_steps, rng_seed),
+        AttractorType::Lorenz84    => make_lorenz84_states(num, p, extra_steps, rng_seed),
+        AttractorType::Rossler     => make_rossler_states(num, p, extra_steps, rng_seed),
+        AttractorType::Thomas      => make_thomas_states(num, p, extra_steps, rng_seed),
+        AttractorType::ChaoticFlow => make_chaotic_flow_states(num, p, extra_steps, rng_seed),
+        AttractorType::Pickover    => make_map_states(num, p, extra_steps, |p, x, y, z| {
             let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
             ((a*y).sin() - z*(b*x).cos(), z*(c*x).sin() - (d*y).cos(), x.sin())
         }),
-        AttractorType::Clifford    => make_map_states(num, &config.params, |p, x, y, _z| {
+        AttractorType::Clifford    => make_map_states(num, p, extra_steps, |p, x, y, _z| {
             let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
             ((a*y).sin() + c*(a*x).cos(), (b*x).sin() + d*(b*y).cos(), 0.0)
         }),
-        AttractorType::Icon  => make_map_states_icon(num, &config.params),
-        AttractorType::IconB => make_map_states_icon_b(num, &config.params),
-        AttractorType::PolyA => make_map_states(num, &config.params, |p, x, y, z| {
+        AttractorType::Icon  => make_map_states_icon(num, p, extra_steps, rng_seed),
+        AttractorType::IconB => make_map_states_icon_b(num, p, extra_steps, rng_seed),
+        AttractorType::PolyA => make_map_states(num, p, extra_steps, |p, x, y, z| {
             let (p0, p1, p2) = (p[0], p[1], p[2]);
             (p0 + y - z * y, p1 + z - x * z, p2 + x - y * x)
         }),
-        AttractorType::PolyAbs => make_map_states(num, &config.params, |p, x, y, z| (
+        AttractorType::PolyAbs => make_map_states(num, p, extra_steps, |p, x, y, z| (
             p[0]  + p[1]*x  + p[2]*y  + p[3]*z  + p[4]*x.abs()  + p[5]*y.abs()  + p[6]*z.abs(),
             p[7]  + p[8]*x  + p[9]*y  + p[10]*z + p[11]*x.abs() + p[12]*y.abs() + p[13]*z.abs(),
             p[14] + p[15]*x + p[16]*y + p[17]*z + p[18]*x.abs() + p[19]*y.abs() + p[20]*z.abs(),
         )),
-        AttractorType::PolyB => make_map_states(num, &config.params, |p, x, y, z| {
+        AttractorType::PolyB => make_map_states(num, p, extra_steps, |p, x, y, z| {
             (p[0] + y - z * (p[1] + y), p[2] + z - x * (p[3] + z), p[4] + x - y * (p[5] + x))
         }),
-        AttractorType::PolyC => make_map_states(num, &config.params, |p, x, y, z| {
+        AttractorType::PolyC => make_map_states(num, p, extra_steps, |p, x, y, z| {
             (
                 p[0] + x * (p[1] + p[2] * x + p[3] * y) + y * (p[4] + p[5] * y),
                 p[6] + y * (p[7] + p[8] * y + p[9] * z) + z * (p[10] + p[11] * z),
                 p[12] + z * (p[13] + p[14] * z + p[15] * x) + x * (p[16] + p[17] * x),
             )
         }),
-        AttractorType::PolyPow => make_map_states(num, &config.params, |p, x, y, z| (
+        AttractorType::PolyPow => make_map_states(num, p, extra_steps, |p, x, y, z| (
             p[0]  + p[1]*x  + p[2]*y  + p[3]*z  + p[4]*x.abs()  + p[5]*y.abs()  + p[6]*z.abs().powf(p[7]),
             p[8]  + p[9]*x  + p[10]*y + p[11]*z + p[12]*x.abs() + p[13]*y.abs() + p[14]*z.abs().powf(p[15]),
             p[16] + p[17]*x + p[18]*y + p[19]*z + p[20]*x.abs() + p[21]*y.abs() + p[22]*z.abs().powf(p[23]),
         )),
-        AttractorType::PolySin => make_map_states(num, &config.params, |p, x, y, z| (
+        AttractorType::PolySin => make_map_states(num, p, extra_steps, |p, x, y, z| (
             p[0]  + p[1]*x  + p[2]*y  + p[3]*z
                   + p[4]*(p[5]*x+p[6]).sin()   + p[7]*(p[8]*y+p[9]).sin()   + p[10]*(p[11]*z+p[12]).sin(),
             p[13] + p[14]*x + p[15]*y + p[16]*z
@@ -1147,7 +1167,7 @@ fn make_attractor_states(num: u32, config: &AttractorConfig) -> Vec<[f32; 4]> {
             p[26] + p[27]*x + p[28]*y + p[29]*z
                   + p[30]*(p[31]*x+p[32]).sin() + p[33]*(p[34]*y+p[35]).sin() + p[36]*(p[37]*z+p[38]).sin(),
         )),
-        AttractorType::PolySprott => make_map_states(num, &config.params, poly_sprott_eval),
+        AttractorType::PolySprott => make_map_states(num, p, extra_steps, poly_sprott_eval),
     }
 }
 
@@ -1191,9 +1211,17 @@ fn poly3d(c: &[f32], x: f32, y: f32, z: f32, order: usize) -> f32 {
     r
 }
 
+/// Xorshift32 PRNG — advances state and returns a float in [0, 1).
+fn rng_f32(s: &mut u32) -> f32 {
+    *s ^= *s << 13;
+    *s ^= *s >> 17;
+    *s ^= *s << 5;
+    (*s as f32) / 4294967296.0
+}
+
 /// Generate `num` initial Lorenz trajectory states spread across the attractor.
-/// Uses 32 warm-up groups with staggered ICs; adjacent samples 100 steps apart.
-fn make_lorenz_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+/// Uses 32 warm-up groups with randomised ICs; adjacent samples 100 steps apart.
+fn make_lorenz_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let a  = params.get(0).copied().unwrap_or(16.227);
     let b  = params.get(1).copied().unwrap_or(15.223);
     let c  = params.get(2).copied().unwrap_or(8.018);
@@ -1205,8 +1233,21 @@ fn make_lorenz_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     let mut states = Vec::with_capacity(num as usize);
 
     for g in 0..num_groups {
-        let (mut x, mut y, mut z) = (0.1 + g as f32 * 0.7, g as f32 * 1.3, g as f32 * 2.1);
+        let mut rng = (g.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            rng_f32(&mut rng) * 50.0 - 25.0,
+            rng_f32(&mut rng) * 50.0 - 25.0,
+            rng_f32(&mut rng) * 50.0,
+        );
         for _ in 0..1_000 {
+            let (nx, ny, nz) = (
+                x + a * dt * (y - x),
+                y + dt * (b * x - y - z * x),
+                z + dt * (x * y - c * z),
+            );
+            (x, y, z) = (nx, ny, nz);
+        }
+        for _ in 0..extra_steps {
             let (nx, ny, nz) = (
                 x + a * dt * (y - x),
                 y + dt * (b * x - y - z * x),
@@ -1230,7 +1271,7 @@ fn make_lorenz_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     states
 }
 
-fn make_lorenz84_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_lorenz84_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let a  = params.get(0).copied().unwrap_or(0.25);
     let b  = params.get(1).copied().unwrap_or(4.0);
     let f  = params.get(2).copied().unwrap_or(8.0);
@@ -1242,15 +1283,26 @@ fn make_lorenz84_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     const INTER: u32 = 100;
     let mut states = Vec::with_capacity(num as usize);
 
-    // Small jitter around a point inside the basin of attraction (~[-3,3]).
+    // Random ICs within the attractor basin (~[-3,3]).
     // 2000 steps × dt≈0.01 ≈ 20 time units — enough to land on the attractor.
     for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
         let (mut x, mut y, mut z) = (
-            0.1 + grp as f32 * 0.05,
-            grp as f32 * 0.1,
-            grp as f32 * 0.05,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 6.0 - 3.0,
+            rng_f32(&mut rng) * 6.0 - 3.0,
         );
         for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * (-a * x - y * y - z * z + a * f),
+                y + dt * (-y + x * y - b * x * z + g),
+                z + dt * (-z + b * x * y + x * z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..extra_steps {
             let (nx, ny, nz) = (
                 x + dt * (-a * x - y * y - z * z + a * f),
                 y + dt * (-y + x * y - b * x * z + g),
@@ -1278,7 +1330,7 @@ fn make_lorenz84_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     states
 }
 
-fn make_rossler_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_rossler_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let a  = params.get(0).copied().unwrap_or(0.2);
     let b  = params.get(1).copied().unwrap_or(0.2);
     let c  = params.get(2).copied().unwrap_or(5.7);
@@ -1289,12 +1341,26 @@ fn make_rossler_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     const INTER: u32 = 100;
     let mut states = Vec::with_capacity(num as usize);
 
-    // Keep starting points within the attractor basin (x∈[-9,11], y∈[-10,5]).
-    // Offsets grp*0.25 → max x=7.75; grp*0.1 → max y=3.1.
+    // Random ICs within the attractor basin (x,y∈[-11,11], z∈[0,22]).
     // 1000 steps × dt≈0.05 ≈ 50 time units ≈ 8 Rössler periods — enough to settle.
     for grp in 0..num_groups {
-        let (mut x, mut y, mut z) = (grp as f32 * 0.25, grp as f32 * 0.1, 0.1);
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            rng_f32(&mut rng) * 22.0 - 11.0,
+            rng_f32(&mut rng) * 22.0 - 11.0,
+            rng_f32(&mut rng) * 22.0,
+        );
         for _ in 0..1000 {
+            let (nx, ny, nz) = (
+                x + dt * (-y - z),
+                y + dt * (x + a * y),
+                z + dt * (b + z * (x - c)),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..extra_steps {
             let (nx, ny, nz) = (
                 x + dt * (-y - z),
                 y + dt * (x + a * y),
@@ -1322,7 +1388,7 @@ fn make_rossler_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     states
 }
 
-fn make_thomas_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_thomas_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let b  = params.get(0).copied().unwrap_or(0.208);
     let dt = params.get(1).copied().unwrap_or(0.05);
 
@@ -1332,12 +1398,23 @@ fn make_thomas_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     let mut states = Vec::with_capacity(num as usize);
 
     for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
         let (mut x, mut y, mut z) = (
-            0.1 + grp as f32 * 0.4,
-            grp as f32 * 0.6,
-            grp as f32 * 0.2,
+            rng_f32(&mut rng) * 9.0 - 4.5,
+            rng_f32(&mut rng) * 9.0 - 4.5,
+            rng_f32(&mut rng) * 9.0 - 4.5,
         );
         for _ in 0..500 {
+            let (nx, ny, nz) = (
+                x + dt * (-b * x + y.sin()),
+                y + dt * (-b * y + z.sin()),
+                z + dt * (-b * z + x.sin()),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..extra_steps {
             let (nx, ny, nz) = (
                 x + dt * (-b * x + y.sin()),
                 y + dt * (-b * y + z.sin()),
@@ -1365,7 +1442,7 @@ fn make_thomas_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     states
 }
 
-fn make_map_states_icon(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_map_states_icon(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let degree = params.get(0).copied().unwrap_or(3.0).max(1.0) as u32;
     let (alpha, beta, lambda, gamma, omega) = (
         params.get(1).copied().unwrap_or(-2.08),
@@ -1403,7 +1480,9 @@ fn make_map_states_icon(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     let mut states = Vec::with_capacity(num as usize);
 
     for grp in 0..num_groups {
-        let (mut x, mut y) = (r_eq + grp as f32 * 0.01, grp as f32 * 0.005);
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let angle = rng_f32(&mut rng) * std::f32::consts::TAU;
+        let (mut x, mut y) = (r_eq * angle.cos(), r_eq * angle.sin());
         let mut z = 0.0f32;
         for _ in 0..WARM {
             let (nx, ny, nz) = icon_step(x, y);
@@ -1411,6 +1490,12 @@ fn make_map_states_icon(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
                 (x, y, z) = (nx, ny, nz);
             } else {
                 (x, y, z) = (r_eq, 0.0, 0.0);
+            }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = icon_step(x, y);
+            if nx.is_finite() && ny.is_finite() {
+                (x, y, z) = (nx, ny, nz);
             }
         }
         for _ in 0..per_group {
@@ -1427,7 +1512,7 @@ fn make_map_states_icon(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     states
 }
 
-fn make_map_states_icon_b(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_map_states_icon_b(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     let degree = params.get(0).copied().unwrap_or(2.0).max(1.0) as u32;
     let (alpha, beta, lambda, gamma, omega) = (
         params.get(1).copied().unwrap_or(-1.715),
@@ -1463,7 +1548,9 @@ fn make_map_states_icon_b(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     let mut states = Vec::with_capacity(num as usize);
 
     for grp in 0..num_groups {
-        let (mut x, mut y) = (r_eq + grp as f32 * 0.01, grp as f32 * 0.005);
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let angle = rng_f32(&mut rng) * std::f32::consts::TAU;
+        let (mut x, mut y) = (r_eq * angle.cos(), r_eq * angle.sin());
         let mut z = 0.0f32;
         for _ in 0..WARM {
             let (nx, ny, nz) = icon_b_step(x, y);
@@ -1471,6 +1558,12 @@ fn make_map_states_icon_b(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
                 (x, y, z) = (nx, ny, nz);
             } else {
                 (x, y, z) = (r_eq, 0.0, 0.0);
+            }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = icon_b_step(x, y);
+            if nx.is_finite() && ny.is_finite() {
+                (x, y, z) = (nx, ny, nz);
             }
         }
         for _ in 0..per_group {
@@ -1539,12 +1632,18 @@ where
 /// Generic state generator for discrete maps.
 /// Probes multiple initial conditions to find one inside the basin of attraction,
 /// then generates `num` states spaced 50 steps apart along the attractor.
-fn make_map_states<F>(num: u32, params: &[f32], f: F) -> Vec<[f32; 4]>
+fn make_map_states<F>(num: u32, params: &[f32], extra_steps: u64, f: F) -> Vec<[f32; 4]>
 where
     F: Fn(&[f32], f32, f32, f32) -> (f32, f32, f32),
 {
     const INTER: u32 = 50;
     let (mut x, mut y, mut z) = probe_map_seed(&f, params);
+    for _ in 0..extra_steps {
+        let (nx, ny, nz) = f(params, x, y, z);
+        if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+            (x, y, z) = (nx, ny, nz);
+        }
+    }
     let mut states = Vec::with_capacity(num as usize);
     while states.len() < num as usize {
         states.push([x, y, z, 0.0]);
@@ -1558,7 +1657,7 @@ where
     states
 }
 
-fn make_chaotic_flow_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
+fn make_chaotic_flow_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
     // Layout: [0..11]=m0..m11, [12..14]=Op0..Op2, [15..17]=Op4..Op6,
     //         [18..20]=Op8..Op10, [21]=dt  (m3, m7, m11 are always constant)
     let get = |i: usize| params.get(i).copied().unwrap_or(0.0);
@@ -1586,11 +1685,12 @@ fn make_chaotic_flow_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
     let mut states = Vec::with_capacity(num as usize);
 
     for grp in 0..num_groups {
-        // Start near a mid-range point; 1000 steps at the param dt lands on the attractor.
+        // Random ICs near the origin; 1000 steps at the param dt lands on the attractor.
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
         let (mut x, mut y, mut z) = (
-            grp as f32 * 0.05,
-            0.1 + grp as f32 * 0.05,
-            grp as f32 * 0.03,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
         );
         for _ in 0..1000 {
             let (nx, ny, nz) = step(x, y, z);
@@ -1598,6 +1698,12 @@ fn make_chaotic_flow_states(num: u32, params: &[f32]) -> Vec<[f32; 4]> {
                 (x, y, z) = (nx, ny, nz);
             } else {
                 (x, y, z) = (0.0, 0.1 + grp as f32 * 0.05, 0.0);
+            }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
             }
         }
         for _ in 0..per_group {
