@@ -21,4 +21,4 @@ pub mod worker;
 
 pub use attractor::{Attractor, ParamDesc, ParamKind, Point, estimate_bounds};
 pub use config::{AttractorConfig, AttractorType};
-pub use search::{SearchResult, SearchWorker};
+pub use search::{SearchResult, SearchWorker, LyapunovWorker};

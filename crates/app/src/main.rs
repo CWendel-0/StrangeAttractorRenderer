@@ -7,7 +7,7 @@ use camera::ArcballCamera;
 use ui::UiState;
 
 use gpu::histogram::{CompositeParams, Histogram};
-use sim::{AttractorConfig, AttractorType, SearchWorker};
+use sim::{AttractorConfig, AttractorType, LyapunovWorker, SearchWorker};
 
 use glam::Vec2;
 use pollster::block_on;
@@ -131,6 +131,9 @@ struct App {
     pending_clear:  bool,
     search_worker:  Option<SearchWorker>,
     searching:      bool,
+
+    lyapunov_worker:  Option<LyapunovWorker>,
+    lyapunov_metrics: Option<(f32, f32)>,
 }
 
 impl App {
@@ -148,6 +151,8 @@ impl App {
             pending_clear: false,
             search_worker: None,
             searching:     false,
+            lyapunov_worker:  None,
+            lyapunov_metrics: None,
         }
     }
 }
@@ -273,6 +278,7 @@ impl App {
 
         // ---- Search result handling ----
         // Check before building the UI so button state is up to date this frame.
+        let mut search_result_received = false;
         if let Some(worker) = &self.search_worker {
             if let Ok(result) = worker.result_rx.try_recv() {
                 // Only apply if the user hasn't switched to a different attractor type.
@@ -286,6 +292,7 @@ impl App {
                     let aspect = size.width as f32 / size.height.max(1) as f32;
                     self.camera = ArcballCamera::fit_aabb(aspect, result.bb_min, result.bb_max);
                     self.pending_clear = true;
+                    search_result_received = true;
                 }
                 self.search_worker = None;
                 self.searching = false;
@@ -295,7 +302,7 @@ impl App {
         // ---- egui input + UI ----
         let raw_input = egui_state.take_egui_input(window);
         self.egui_ctx.begin_pass(raw_input);
-        ui.show(&self.egui_ctx, self.searching);
+        ui.show(&self.egui_ctx, self.searching, self.lyapunov_metrics);
         let full_output = self.egui_ctx.end_pass();
         egui_state.handle_platform_output(window, full_output.platform_output.clone());
 
@@ -321,6 +328,33 @@ impl App {
             let aspect = size.width as f32 / size.height.max(1) as f32;
             let (bb_min, bb_max) = ui.attractor.estimate_bounds_cpu();
             self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
+        }
+
+        // ---- Lyapunov worker management ----
+        // Poll for a completed result.
+        if let Some(worker) = &self.lyapunov_worker {
+            match worker.result_rx.try_recv() {
+                Ok(v) => {
+                    self.lyapunov_metrics = Some(v);
+                    self.lyapunov_worker = None;
+                }
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    // Thread exited without finding valid metrics.
+                    self.lyapunov_metrics = Some((f32::NAN, f32::NAN));
+                    self.lyapunov_worker = None;
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => {}
+            }
+        }
+        // Clear stale display when the attractor type changes.
+        if ui.type_changed {
+            self.lyapunov_metrics = None;
+        }
+        // (Re-)spawn whenever params change, a search result landed, or on initial launch.
+        if ui.dirty || ui.type_changed || search_result_received
+            || (self.lyapunov_worker.is_none() && self.lyapunov_metrics.is_none())
+        {
+            self.lyapunov_worker = Some(LyapunovWorker::spawn(ui.attractor.clone()));
         }
 
         if ui.gradient_a_dirty {

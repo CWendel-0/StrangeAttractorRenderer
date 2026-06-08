@@ -35,6 +35,7 @@ pub struct UiState {
     selected_stop_b: Option<usize>,
 
     attractor_open: bool,
+    pub show_metrics: bool,
 }
 
 impl UiState {
@@ -58,10 +59,11 @@ impl UiState {
             selected_stop_a: None,
             selected_stop_b: None,
             attractor_open: true,
+            show_metrics: true,
         }
     }
 
-    pub fn show(&mut self, ctx: &Context, searching: bool) {
+    pub fn show(&mut self, ctx: &Context, searching: bool, metrics: Option<(f32, f32)>) {
         self.dirty = false;
         self.type_changed = false;
         self.search_requested = false;
@@ -100,17 +102,19 @@ impl UiState {
                 if self.attractor.attractor_type == AttractorType::PolySprott {
                     // Order spinner lives above the scroll so it stays visible while scrolling.
                     let mut order_val = self.attractor.params[0] as i32;
-                    ui.horizontal(|ui| {
+                    let order_changed = ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.attractor.frozen[0], "");
                         ui.label("Order");
-                        if ui.add(
+                        ui.add(
                             egui::DragValue::new(&mut order_val)
                                 .range(2..=5)
                                 .speed(1.0),
-                        ).changed() {
-                            self.attractor.params[0] = order_val as f32;
-                            self.dirty = true;
-                        }
-                    });
+                        ).changed()
+                    }).inner;
+                    if order_changed {
+                        self.attractor.params[0] = order_val as f32;
+                        self.dirty = true;
+                    }
 
                     let n = sprott_num_terms(order_val as usize);
                     ui.label(format!("Parameters  ({} × 3)", n));
@@ -120,36 +124,48 @@ impl UiState {
                         .show(ui, |ui| {
                             // X equation: params[1..=n]
                             for k in 0..n {
-                                let label = format!("P{}", k);
-                                if velocity_slider(
-                                    ui,
-                                    &mut self.attractor.params[1 + k],
-                                    -1.5, 1.5,
-                                    &label,
-                                    egui::Id::new(("ps_x", k)),
-                                ) { self.dirty = true; }
+                                let label = format!("P{k}");
+                                let idx   = 1 + k;
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.attractor.frozen[idx], "");
+                                    if velocity_slider(
+                                        ui,
+                                        &mut self.attractor.params[idx],
+                                        -1.5, 1.5,
+                                        &label,
+                                        egui::Id::new(("ps_x", k)),
+                                    ) { self.dirty = true; }
+                                });
                             }
                             // Y equation: params[57..=56+n]
                             for k in 0..n {
                                 let label = format!("P{}", n + k);
-                                if velocity_slider(
-                                    ui,
-                                    &mut self.attractor.params[57 + k],
-                                    -1.5, 1.5,
-                                    &label,
-                                    egui::Id::new(("ps_y", k)),
-                                ) { self.dirty = true; }
+                                let idx   = 57 + k;
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.attractor.frozen[idx], "");
+                                    if velocity_slider(
+                                        ui,
+                                        &mut self.attractor.params[idx],
+                                        -1.5, 1.5,
+                                        &label,
+                                        egui::Id::new(("ps_y", k)),
+                                    ) { self.dirty = true; }
+                                });
                             }
                             // Z equation: params[113..=112+n]
                             for k in 0..n {
                                 let label = format!("P{}", 2 * n + k);
-                                if velocity_slider(
-                                    ui,
-                                    &mut self.attractor.params[113 + k],
-                                    -1.5, 1.5,
-                                    &label,
-                                    egui::Id::new(("ps_z", k)),
-                                ) { self.dirty = true; }
+                                let idx   = 113 + k;
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.attractor.frozen[idx], "");
+                                    if velocity_slider(
+                                        ui,
+                                        &mut self.attractor.params[idx],
+                                        -1.5, 1.5,
+                                        &label,
+                                        egui::Id::new(("ps_z", k)),
+                                    ) { self.dirty = true; }
+                                });
                             }
                         });
                 } else {
@@ -161,40 +177,48 @@ impl UiState {
                             for (i, desc) in descs.iter().enumerate() {
                                 match &desc.kind {
                                     ParamKind::Continuous => {
-                                        if velocity_slider(
-                                            ui,
-                                            &mut self.attractor.params[i],
-                                            desc.min,
-                                            desc.max,
-                                            desc.name,
-                                            egui::Id::new(("param_slider", i)),
-                                        ) { self.dirty = true; }
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(&mut self.attractor.frozen[i], "");
+                                            if velocity_slider(
+                                                ui,
+                                                &mut self.attractor.params[i],
+                                                desc.min,
+                                                desc.max,
+                                                desc.name,
+                                                egui::Id::new(("param_slider", i)),
+                                            ) { self.dirty = true; }
+                                        });
                                     }
                                     ParamKind::Integer => {
                                         let mut val = self.attractor.params[i] as i32;
-                                        ui.horizontal(|ui| {
+                                        let changed = ui.horizontal(|ui| {
+                                            ui.checkbox(&mut self.attractor.frozen[i], "");
                                             ui.label(desc.name);
-                                            if ui.add(
+                                            ui.add(
                                                 egui::DragValue::new(&mut val)
                                                     .range(desc.min as i32..=desc.max as i32)
                                                     .speed(1.0),
-                                            ).changed() {
-                                                self.attractor.params[i] = val as f32;
-                                                self.dirty = true;
-                                            }
-                                        });
+                                            ).changed()
+                                        }).inner;
+                                        if changed {
+                                            self.attractor.params[i] = val as f32;
+                                            self.dirty = true;
+                                        }
                                     }
                                     ParamKind::Enum(choices) => {
                                         let cur = self.attractor.params[i] as usize;
                                         let label = choices.get(cur).copied().unwrap_or("?");
                                         let mut idx = cur;
-                                        egui::ComboBox::from_label(desc.name)
-                                            .selected_text(label)
-                                            .show_ui(ui, |ui| {
-                                                for (j, &ch) in choices.iter().enumerate() {
-                                                    ui.selectable_value(&mut idx, j, ch);
-                                                }
-                                            });
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(&mut self.attractor.frozen[i], "");
+                                            egui::ComboBox::from_label(desc.name)
+                                                .selected_text(label)
+                                                .show_ui(ui, |ui| {
+                                                    for (j, &ch) in choices.iter().enumerate() {
+                                                        ui.selectable_value(&mut idx, j, ch);
+                                                    }
+                                                });
+                                        });
                                         if idx != cur {
                                             self.attractor.params[i] = idx as f32;
                                             self.dirty = true;
@@ -232,6 +256,7 @@ impl UiState {
                 ui.label("Display");
                 ui.add(egui::Slider::new(&mut self.brightness, 0.1..=5.0).text("Brightness"));
                 ui.add(egui::Slider::new(&mut self.gamma, 0.5..=4.0).text("Gamma"));
+                ui.checkbox(&mut self.show_metrics, "Show λ₁ / D_KY");
 
                 ui.separator();
                 ui.label("Anti-aliasing (supersampling)");
@@ -293,5 +318,48 @@ impl UiState {
                     }
                 }
             });
+
+        // ---- Bottom-left metrics overlay ----
+        if self.show_metrics {
+            egui::Area::new(egui::Id::new("metrics_overlay"))
+                .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_black_alpha(160))
+                        .rounding(4.0)
+                        .inner_margin(8.0)
+                        .show(ui, |ui| {
+                            match metrics {
+                                Some((ly1, dky)) if !ly1.is_nan() => {
+                                    ui.label(
+                                        egui::RichText::new(format!("λ₁  = {:.4}", ly1))
+                                            .monospace()
+                                            .color(egui::Color32::WHITE),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!("D_KY = {:.4}", dky))
+                                            .monospace()
+                                            .color(egui::Color32::WHITE),
+                                    );
+                                }
+                                Some(_) => {
+                                    ui.label(
+                                        egui::RichText::new("N/A")
+                                            .monospace()
+                                            .color(egui::Color32::from_gray(180)),
+                                    );
+                                }
+                                None => {
+                                    ui.label(
+                                        egui::RichText::new("Computing…")
+                                            .monospace()
+                                            .color(egui::Color32::from_gray(180)),
+                                    );
+                                }
+                            }
+                        });
+                });
+        }
     }
 }

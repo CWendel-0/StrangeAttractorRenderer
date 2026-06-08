@@ -81,6 +81,18 @@ impl AttractorType {
         }
     }
 
+    /// Returns true for continuous-time ODE attractors integrated with Euler steps.
+    /// These have one Lyapunov exponent ≈ 0 along the flow, so D_KY = 2 + λ₁/|λ₃|
+    /// rather than the map formula D_KY = 1 + λ₁/|λ₂|.
+    pub fn is_flow(self) -> bool {
+        matches!(self,
+            Self::Lorenz | Self::Lorenz84 | Self::Rossler | Self::Thomas
+            // ChaoticFlow excluded: at its working dT range (~0.5–1.5) the Euler
+            // discretization behaves as a 3D discrete map, not a continuous flow.
+            // The map D_KY formula (1 + λ₁/|λ₂|) applies.
+        )
+    }
+
     pub const ALL: &'static [Self] = &[
         Self::Lorenz,
         Self::Lorenz84,
@@ -105,13 +117,18 @@ impl AttractorType {
 pub struct AttractorConfig {
     pub attractor_type: AttractorType,
     pub params:         Vec<f32>,
+    /// Per-parameter freeze flags: search skips frozen indices and keeps the
+    /// current value instead of sampling a new one.
+    pub frozen:         Vec<bool>,
 }
 
 impl AttractorConfig {
     pub fn new(t: AttractorType) -> Self {
+        let descs = t.descriptors();
         Self {
             attractor_type: t,
-            params: t.descriptors().iter().map(|d| d.default).collect(),
+            params: descs.iter().map(|d| d.default).collect(),
+            frozen: vec![false; descs.len()],
         }
     }
 

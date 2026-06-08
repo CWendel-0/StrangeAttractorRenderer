@@ -10,7 +10,7 @@ const DESCS: &[ParamDesc] = &[
     ParamDesc { name: "A",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 16.227 },
     ParamDesc { name: "B",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 15.223 },
     ParamDesc { name: "C",  kind: ParamKind::Continuous, min: 0.0, max: 20.0, default: 8.018  },
-    ParamDesc { name: "dT", kind: ParamKind::Continuous, min: 0.0, max: 0.5,  default: 0.049  },
+    ParamDesc { name: "dT", kind: ParamKind::Continuous, min: 0.001, max: 0.05, default: 0.049  },
 ];
 
 pub struct Lorenz {

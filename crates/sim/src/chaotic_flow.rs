@@ -41,7 +41,7 @@ const DESCS: &[ParamDesc] = &[
     ParamDesc { name: "Op8",  kind: ParamKind::Enum(&["-","X","Y","Z"]), min: 0.0, max: 3.0, default: 1.0 },
     ParamDesc { name: "Op9",  kind: ParamKind::Enum(&["-","X","Y","Z"]), min: 0.0, max: 3.0, default: 0.0 },
     ParamDesc { name: "Op10", kind: ParamKind::Enum(&["-","X","Y","Z"]), min: 0.0, max: 3.0, default: 1.0 },
-    ParamDesc { name: "dT",   kind: ParamKind::Continuous, min: 0.001, max: 1.0, default: 0.397 },
+    ParamDesc { name: "dT",   kind: ParamKind::Continuous, min: 0.3, max: 1.5, default: 0.945 },
 ];
 
 #[inline]
