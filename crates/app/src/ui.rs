@@ -42,15 +42,15 @@ impl UiState {
     pub fn new() -> Self {
         Self {
             attractor:  AttractorConfig::new(AttractorType::default()),
-            brightness: 1.0,
-            gamma:      2.2,
-            max_sigma:  5.0,
+            brightness: 1.1,
+            gamma:      0.95,
+            max_sigma:  1.0,
             min_sigma:  0.3,
             ss_scale:   2,
             dirty:            false,
             type_changed:     false,
             search_requested: false,
-            render_mode: RenderMode::Monochrome,
+            render_mode: RenderMode::Light,
             gradient_a:       Gradient::density_default(),
             gradient_b:       Gradient::speed_default(),
             gradient_a_dirty: true,
@@ -269,12 +269,12 @@ impl UiState {
                 ui.separator();
                 ui.label("Blur (Density Estimation)");
                 ui.add(
-                    egui::Slider::new(&mut self.max_sigma, 0.5..=15.0)
+                    egui::Slider::new(&mut self.max_sigma, 0.1..=5.0)
                         .text("Max blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.min_sigma, 0.1..=5.0)
+                    egui::Slider::new(&mut self.min_sigma, 0.05..=2.0)
                         .text("Min blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
@@ -330,18 +330,24 @@ impl UiState {
                         .rounding(4.0)
                         .inner_margin(8.0)
                         .show(ui, |ui| {
+                            ui.set_min_width(160.0);
                             match metrics {
                                 Some((ly1, dky)) if !ly1.is_nan() => {
-                                    ui.label(
-                                        egui::RichText::new(format!("λ₁  = {:.4}", ly1))
-                                            .monospace()
-                                            .color(egui::Color32::WHITE),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(format!("D_KY = {:.4}", dky))
-                                            .monospace()
-                                            .color(egui::Color32::WHITE),
-                                    );
+                                    egui::Grid::new("metrics_grid")
+                                        .num_columns(3)
+                                        .spacing([4.0, 2.0])
+                                        .show(ui, |ui| {
+                                            let w = egui::Color32::WHITE;
+                                            let m = |s: &str| egui::RichText::new(s).monospace().color(w);
+                                            ui.label(m("λ₁"));
+                                            ui.label(m("="));
+                                            ui.label(m(&format!("{:.4}", ly1)));
+                                            ui.end_row();
+                                            ui.label(m("D_KY"));
+                                            ui.label(m("="));
+                                            ui.label(m(&format!("{:.4}", dky)));
+                                            ui.end_row();
+                                        });
                                 }
                                 Some(_) => {
                                     ui.label(

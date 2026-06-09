@@ -1,3 +1,11 @@
+/// Color space used when interpolating between stops.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum InterpMode {
+    Srgb,
+    Oklab,
+    Oklch,
+}
+
 /// A single color stop in a gradient.  `pos` is in [0.0, 1.0].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColorStop {
@@ -13,33 +21,123 @@ pub struct ColorStop {
 #[derive(Clone, Debug)]
 pub struct Gradient {
     pub stops: Vec<ColorStop>,
+    pub interp_mode: InterpMode,
+}
+
+// ---------------------------------------------------------------------------
+// Oklab conversions (Björn Ottosson, 2020)
+// ---------------------------------------------------------------------------
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.0031308 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
+}
+
+fn linear_rgb_to_oklab(r: f32, g: f32, b: f32) -> [f32; 3] {
+    let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+    let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+    let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+    let l_ = l.cbrt();
+    let m_ = m.cbrt();
+    let s_ = s.cbrt();
+    [
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    ]
+}
+
+fn oklab_to_linear_rgb(ll: f32, a: f32, b: f32) -> [f32; 3] {
+    let l_ = ll + 0.3963377774 * a + 0.2158037573 * b;
+    let m_ = ll - 0.1055613458 * a - 0.0638541728 * b;
+    let s_ = ll - 0.0894841775 * a - 1.2914855480 * b;
+    let l = l_ * l_ * l_;
+    let m = m_ * m_ * m_;
+    let s = s_ * s_ * s_;
+    [
+         4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ]
+}
+
+fn rgb_u8_to_oklab(rgb: [u8; 3]) -> [f32; 3] {
+    let r = srgb_to_linear(rgb[0] as f32 / 255.0);
+    let g = srgb_to_linear(rgb[1] as f32 / 255.0);
+    let b = srgb_to_linear(rgb[2] as f32 / 255.0);
+    linear_rgb_to_oklab(r, g, b)
+}
+
+fn oklab_to_rgb_u8(lab: [f32; 3]) -> [u8; 3] {
+    let [r, g, b] = oklab_to_linear_rgb(lab[0], lab[1], lab[2]);
+    [
+        (linear_to_srgb(r.clamp(0.0, 1.0)) * 255.0).round() as u8,
+        (linear_to_srgb(g.clamp(0.0, 1.0)) * 255.0).round() as u8,
+        (linear_to_srgb(b.clamp(0.0, 1.0)) * 255.0).round() as u8,
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// Minimal xorshift32 PRNG — only used for gradient randomization
+// ---------------------------------------------------------------------------
+
+fn rng_next(state: &mut u32) -> u32 {
+    *state ^= *state << 13;
+    *state ^= *state >> 17;
+    *state ^= *state << 5;
+    *state
+}
+
+fn rng_f32(state: &mut u32) -> f32 {
+    rng_next(state) as f32 / u32::MAX as f32
+}
+
+fn oklab_to_oklch(lab: [f32; 3]) -> [f32; 3] {
+    let c = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
+    let h = lab[2].atan2(lab[1]);
+    [lab[0], c, h]
+}
+
+fn oklch_to_oklab(lch: [f32; 3]) -> [f32; 3] {
+    [lch[0], lch[1] * lch[2].cos(), lch[1] * lch[2].sin()]
+}
+
+fn lerp_hue(a: f32, b: f32, t: f32) -> f32 {
+    use std::f32::consts::TAU;
+    let diff = (b - a).rem_euclid(TAU);
+    let delta = if diff > std::f32::consts::PI { diff - TAU } else { diff };
+    a + delta * t
 }
 
 impl Gradient {
-    /// Default density gradient: black → blue → cyan → white.
+    /// Default density gradient: yellow → deep red → blue → cyan.
     pub fn density_default() -> Self {
         Self {
             stops: vec![
-                ColorStop { pos: 0.0, rgb: [0,   0,   0  ] },
-                ColorStop { pos: 0.4, rgb: [10,  20,  100] },
-                ColorStop { pos: 0.7, rgb: [20,  120, 220] },
-                ColorStop { pos: 1.0, rgb: [255, 255, 255] },
+                ColorStop { pos: 0.00, rgb: [210, 220,   0] },
+                ColorStop { pos: 0.35, rgb: [170,  15,  40] },
+                ColorStop { pos: 0.70, rgb: [ 40,  70, 200] },
+                ColorStop { pos: 1.00, rgb: [ 70, 210, 230] },
             ],
+            interp_mode: InterpMode::Oklab,
         }
     }
 
-    /// Default speed gradient: black → deep red → yellow.
+    /// Default speed gradient: cyan → purple.
     pub fn speed_default() -> Self {
         Self {
             stops: vec![
-                ColorStop { pos: 0.0, rgb: [0,   0,   0  ] },
-                ColorStop { pos: 0.5, rgb: [180, 40,  0  ] },
-                ColorStop { pos: 1.0, rgb: [255, 220, 0  ] },
+                ColorStop { pos: 0.0, rgb: [  0, 185, 220] },
+                ColorStop { pos: 1.0, rgb: [110,   0, 210] },
             ],
+            interp_mode: InterpMode::Oklab,
         }
     }
 
-    /// Linearly interpolate between stops to sample the color at `t ∈ [0, 1]`.
+    /// Sample the color at `t ∈ [0, 1]`, interpolating in `self.interp_mode` color space.
     pub fn sample(&self, t: f32) -> [u8; 3] {
         let t = t.clamp(0.0, 1.0);
         let hi = self.stops.partition_point(|s| s.pos < t);
@@ -49,11 +147,32 @@ impl Gradient {
         let hi = &self.stops[hi];
         let span = hi.pos - lo.pos;
         let f = if span < 1e-6 { 0.0 } else { (t - lo.pos) / span };
-        [
-            lerp_u8(lo.rgb[0], hi.rgb[0], f),
-            lerp_u8(lo.rgb[1], hi.rgb[1], f),
-            lerp_u8(lo.rgb[2], hi.rgb[2], f),
-        ]
+
+        match self.interp_mode {
+            InterpMode::Srgb => [
+                lerp_u8(lo.rgb[0], hi.rgb[0], f),
+                lerp_u8(lo.rgb[1], hi.rgb[1], f),
+                lerp_u8(lo.rgb[2], hi.rgb[2], f),
+            ],
+            InterpMode::Oklab => {
+                let a = rgb_u8_to_oklab(lo.rgb);
+                let b = rgb_u8_to_oklab(hi.rgb);
+                oklab_to_rgb_u8([
+                    a[0] + (b[0] - a[0]) * f,
+                    a[1] + (b[1] - a[1]) * f,
+                    a[2] + (b[2] - a[2]) * f,
+                ])
+            }
+            InterpMode::Oklch => {
+                let a = oklab_to_oklch(rgb_u8_to_oklab(lo.rgb));
+                let b = oklab_to_oklch(rgb_u8_to_oklab(hi.rgb));
+                oklab_to_rgb_u8(oklch_to_oklab([
+                    a[0] + (b[0] - a[0]) * f,
+                    a[1] + (b[1] - a[1]) * f,
+                    lerp_hue(a[2], b[2], f),
+                ]))
+            }
+        }
     }
 
     /// Rasterize to a 256-texel RGBA8 row (width=256, height=1).
@@ -65,6 +184,42 @@ impl Gradient {
             buf.extend_from_slice(&[r, g, b, 255]);
         }
         buf
+    }
+
+    /// Replace stops with 2–4 randomly generated colors at random positions.
+    /// Endpoints (pos 0.0 and 1.0) are always present; intermediate stops get
+    /// sorted random positions. Colors are generated in OKLCh for vibrancy.
+    pub fn randomize(&mut self) {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u32)
+            .unwrap_or(0xDEAD_BEEF);
+        let mut rng = seed.max(1);
+
+        let n = 2 + (rng_next(&mut rng) % 3) as usize; // 2, 3, or 4 stops
+
+        // Random middle positions, sorted.
+        let mut mid: Vec<f32> = (0..n.saturating_sub(2))
+            .map(|_| 0.05 + rng_f32(&mut rng) * 0.90)
+            .collect();
+        mid.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let positions: Vec<f32> = std::iter::once(0.0f32)
+            .chain(mid)
+            .chain(std::iter::once(1.0f32))
+            .collect();
+
+        self.stops = positions
+            .iter()
+            .map(|&pos| {
+                let l = 0.15 + rng_f32(&mut rng) * 0.75; // lightness  [0.15, 0.90]
+                let c = 0.06 + rng_f32(&mut rng) * 0.22; // chroma     [0.06, 0.28]
+                let h = rng_f32(&mut rng) * std::f32::consts::TAU;
+                let rgb = oklab_to_rgb_u8(oklch_to_oklab([l, c, h]));
+                ColorStop { pos, rgb }
+            })
+            .collect();
     }
 }
 
@@ -95,6 +250,27 @@ pub fn gradient_editor(
 ) -> bool {
     let mut changed = false;
     let width = ui.available_width().max(80.0);
+
+    // ── interpolation mode toggle ───────────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.label("Interp:");
+        for (mode, label) in [(InterpMode::Srgb, "sRGB"), (InterpMode::Oklab, "Oklab"), (InterpMode::Oklch, "OKLCh")] {
+            if ui.selectable_label(gradient.interp_mode == mode, label).clicked()
+                && gradient.interp_mode != mode
+            {
+                gradient.interp_mode = mode;
+                changed = true;
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.small_button("↺ Randomize").clicked() {
+                gradient.randomize();
+                changed = true;
+            }
+        });
+    });
 
     // ── gradient preview bar ────────────────────────────────────────────────
     let bar_size = egui::vec2(width, 20.0);

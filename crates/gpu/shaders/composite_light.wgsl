@@ -75,6 +75,39 @@ fn sample_grad(tex: texture_2d<f32>, t: f32) -> vec3<f32> {
     return textureSample(tex, grad_sampler, vec2<f32>(clamp(t, 0.0, 1.0), 0.5)).rgb;
 }
 
+// ---------------------------------------------------------------------------
+// HSL blend mode helpers (W3C Compositing and Blending Level 1)
+// ---------------------------------------------------------------------------
+
+fn blm_lum(c: vec3<f32>) -> f32 {
+    return dot(c, vec3<f32>(0.299, 0.587, 0.114));
+}
+
+fn blm_clip(c: vec3<f32>) -> vec3<f32> {
+    let l = blm_lum(c);
+    let n = min(c.r, min(c.g, c.b));
+    let x = max(c.r, max(c.g, c.b));
+    var r = c;
+    if n < 0.0 { r = l + (r - l) * l / max(l - n, 1e-6); }
+    if x > 1.0 { r = l + (r - l) * (1.0 - l) / max(x - l, 1e-6); }
+    return r;
+}
+
+fn blm_set_lum(c: vec3<f32>, l: f32) -> vec3<f32> {
+    return blm_clip(c + (l - blm_lum(c)));
+}
+
+fn blm_sat(c: vec3<f32>) -> f32 {
+    return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+}
+
+fn blm_set_sat(c: vec3<f32>, s: f32) -> vec3<f32> {
+    let mn = min(c.r, min(c.g, c.b));
+    let mx = max(c.r, max(c.g, c.b));
+    if mx <= mn { return vec3<f32>(0.0); }
+    return (c - mn) * s / (mx - mn);
+}
+
 @fragment
 fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let px = u32(in.uv.x * f32(params.width));
@@ -164,6 +197,48 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         }
         case 8u {  // Hard Mix  (1 where A+B ≥ 1, else 0)
             blended = step(vec3<f32>(1.0), col_a + col_b);
+        }
+        case 9u {  // Screen  (inverse Multiply; brightens without hard clipping)
+            blended = 1.0 - (1.0 - col_a) * (1.0 - col_b);
+        }
+        case 10u {  // Overlay  (Multiply if A<0.5, Screen if A≥0.5)
+            blended = select(
+                1.0 - 2.0 * (1.0 - col_a) * (1.0 - col_b),
+                2.0 * col_a * col_b,
+                col_a < vec3<f32>(0.5),
+            );
+        }
+        case 11u {  // Color Dodge  (brightens A by B; B=1 → white)
+            blended = select(
+                min(vec3<f32>(1.0), col_a / max(1.0 - col_b, vec3<f32>(1e-6))),
+                vec3<f32>(1.0),
+                col_b >= vec3<f32>(1.0 - 1e-6),
+            );
+        }
+        case 12u {  // Color Burn  (darkens A by B; B=0 → black)
+            blended = select(
+                1.0 - min(vec3<f32>(1.0), (1.0 - col_a) / max(col_b, vec3<f32>(1e-6))),
+                vec3<f32>(0.0),
+                col_b <= vec3<f32>(1e-6),
+            );
+        }
+        case 13u {  // Difference
+            blended = abs(col_a - col_b);
+        }
+        case 14u {  // Exclusion  (softer Difference)
+            blended = col_a + col_b - 2.0 * col_a * col_b;
+        }
+        case 15u {  // Hue  (hue of B, saturation+luminosity of A)
+            blended = blm_set_lum(blm_set_sat(col_b, blm_sat(col_a)), blm_lum(col_a));
+        }
+        case 16u {  // Saturation  (saturation of B, hue+luminosity of A)
+            blended = blm_set_lum(blm_set_sat(col_a, blm_sat(col_b)), blm_lum(col_a));
+        }
+        case 17u {  // Color  (hue+saturation of B, luminosity of A)
+            blended = blm_set_lum(col_b, blm_lum(col_a));
+        }
+        case 18u {  // Luminosity  (luminosity of B, hue+saturation of A)
+            blended = blm_set_lum(col_a, blm_lum(col_b));
         }
         default {  // 0 = Add (and fallback for any unknown value)
             blended = clamp(col_a + col_b, vec3<f32>(0.0), vec3<f32>(1.0));

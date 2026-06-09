@@ -48,15 +48,25 @@ pub enum RenderMode {
 #[repr(u32)]
 pub enum BlendMode {
     #[default]
-    Add      = 0,
-    Subtract = 1,
-    Multiply = 2,
-    Divide   = 3,
-    Lighten  = 4,
-    Darken   = 5,
-    HardLight = 6,
-    SoftLight = 7,
-    HardMix  = 8,
+    Add        = 0,
+    Subtract   = 1,
+    Multiply   = 2,
+    Divide     = 3,
+    Lighten    = 4,
+    Darken     = 5,
+    HardLight  = 6,
+    SoftLight  = 7,
+    HardMix    = 8,
+    Screen     = 9,
+    Overlay    = 10,
+    ColorDodge = 11,
+    ColorBurn  = 12,
+    Difference = 13,
+    Exclusion  = 14,
+    Hue        = 15,
+    Saturation = 16,
+    Color      = 17,
+    Luminosity = 18,
 }
 
 impl BlendMode {
@@ -64,21 +74,34 @@ impl BlendMode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Add      => "Add",
-            Self::Subtract => "Subtract",
-            Self::Multiply => "Multiply",
-            Self::Divide   => "Divide",
-            Self::Lighten  => "Lighten",
-            Self::Darken   => "Darken",
-            Self::HardLight => "Hard Light",
-            Self::SoftLight => "Soft Light",
-            Self::HardMix  => "Hard Mix",
+            Self::Add        => "Add",
+            Self::Subtract   => "Subtract",
+            Self::Multiply   => "Multiply",
+            Self::Divide     => "Divide",
+            Self::Lighten    => "Lighten",
+            Self::Darken     => "Darken",
+            Self::HardLight  => "Hard Light",
+            Self::SoftLight  => "Soft Light",
+            Self::HardMix    => "Hard Mix",
+            Self::Screen     => "Screen",
+            Self::Overlay    => "Overlay",
+            Self::ColorDodge => "Color Dodge",
+            Self::ColorBurn  => "Color Burn",
+            Self::Difference => "Difference",
+            Self::Exclusion  => "Exclusion",
+            Self::Hue        => "Hue",
+            Self::Saturation => "Saturation",
+            Self::Color      => "Color",
+            Self::Luminosity => "Luminosity",
         }
     }
 
     pub const ALL: &'static [Self] = &[
-        Self::Add, Self::Subtract, Self::Multiply, Self::Divide,
+        Self::Add, Self::Screen, Self::Multiply, Self::Overlay,
         Self::Lighten, Self::Darken, Self::HardLight, Self::SoftLight, Self::HardMix,
+        Self::Subtract, Self::Divide, Self::ColorDodge, Self::ColorBurn,
+        Self::Difference, Self::Exclusion,
+        Self::Hue, Self::Saturation, Self::Color, Self::Luminosity,
     ];
 }
 
