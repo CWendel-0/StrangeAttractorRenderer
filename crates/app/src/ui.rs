@@ -70,7 +70,7 @@ impl UiState {
             canvas_width,
             canvas_height,
             canvas_dirty: false,
-            expanded:     false,
+            expanded:     true,
             viewport_drag_left:   egui::Vec2::ZERO,
             viewport_drag_middle: egui::Vec2::ZERO,
             viewport_scroll:      0.0,
