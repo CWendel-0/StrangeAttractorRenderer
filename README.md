@@ -20,7 +20,11 @@ This app simulates **8,192 trajectories in parallel**, each stepped
 high-resolution histogram texture. Frame after frame, the histogram
 accumulates, building up an increasingly detailed picture of the
 attractor's structure — entirely on the GPU, with no CPU-side
-trajectory storage.
+trajectory storage. This is a way of generating and rendering
+strange attractors **fast**, with optimizations for speed without
+sacrificing fidelity or quality. Other renderers for this type of
+data can take hours to produce a result that this program achieves
+in seconds, in real-time, visible as you watch it build on screen.
 
 On top of the raw density data, the renderer applies:
 
