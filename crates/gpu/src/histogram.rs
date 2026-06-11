@@ -15,15 +15,15 @@ const ACCUM_ELEM_SIZE: u64 = 8;
 const DEFAULT_SS_SCALE: u32 = 2;
 
 /// Number of independent Lorenz trajectories simulated in parallel on the GPU.
-const SIM_NUM_TRAJECTORIES: u32 = 8_192;
+pub const SIM_NUM_TRAJECTORIES: u32 = 8_192;
 /// Euler steps each trajectory advances per compute dispatch (≈ one frame).
-const SIM_STEPS_PER_DISPATCH: u32 = 512;
+pub const SIM_STEPS_PER_DISPATCH: u32 = 512;
 
 /// Composite HDR intermediate (luma before swapchain blit).
 const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// Horizontal DE pass intermediate: .r = blurred log-density, .g = blurred mean speed (both [0,1]).
-const DE_H_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Float;
+const DE_H_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
 /// Width (in texels) of the 1D gradient textures (256×1 Rgba8Unorm).
 const GRADIENT_TEX_WIDTH: u32 = 256;
@@ -144,6 +144,7 @@ pub struct CompositeParams {
     pub ss_scale:        u32,
     pub blend_mode:      u32,  // BlendMode::as_u32(); only used by composite_light.wgsl
     pub max_speed_enc:   u32,  // max speed_enc seen this frame; used by composite_light to normalize gradient B
+    pub alpha_power:     f32,  // exponent for density→alpha: 1.0=linear (Chaoscope-style), 3.0=cubic (strong speckle suppression)
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +152,8 @@ pub struct CompositeParams {
 // ---------------------------------------------------------------------------
 
 pub struct Histogram {
-    width:        u32,
-    height:       u32,
+    pub width:    u32,
+    pub height:   u32,
     pub ss_scale: u32,
 
     // ---- accumulation buffer (ss_scale× super-sampled) ----
@@ -187,7 +188,7 @@ pub struct Histogram {
     gradient_b_texture_view: wgpu::TextureView,
     gradient_sampler:        wgpu::Sampler,
 
-    // ---- blit pass (hdr_texture → swapchain) ----
+    // ---- blit pass (hdr_texture → canvas_texture) ----
     blit_pipeline:    wgpu::RenderPipeline,
     blit_bind_layout: wgpu::BindGroupLayout,
     blit_sampler:     wgpu::Sampler,
@@ -195,6 +196,10 @@ pub struct Histogram {
     // ---- HDR intermediate ----
     hdr_texture:      wgpu::Texture,
     hdr_texture_view: wgpu::TextureView,
+
+    // ---- canvas output (Rgba8Unorm, TEXTURE_BINDING for egui display) ----
+    canvas_texture:      wgpu::Texture,
+    canvas_texture_view: wgpu::TextureView,
 
     // ---- GPU max-density / max-speed readback ----
     max_density_buf:  wgpu::Buffer,
@@ -222,7 +227,6 @@ impl Histogram {
         queue:  &wgpu::Queue,
         width:  u32,
         height: u32,
-        surface_format: wgpu::TextureFormat,
         initial_config: &AttractorConfig,
     ) -> Self {
         let ss_scale = DEFAULT_SS_SCALE;
@@ -391,7 +395,7 @@ impl Histogram {
                 entry_point: "fs_main",
                 targets:     &[Some(wgpu::ColorTargetState {
                     format:     HDR_FORMAT,
-                    blend:      None,
+                    blend:      Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: Default::default(),
@@ -501,7 +505,7 @@ impl Histogram {
                     entry_point: "fs_main",
                     targets:     &[Some(wgpu::ColorTargetState {
                         format:     HDR_FORMAT,
-                        blend:      None,
+                        blend:      Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: Default::default(),
@@ -558,7 +562,7 @@ impl Histogram {
                 module:      &blit_shader,
                 entry_point: "fs_main",
                 targets:     &[Some(wgpu::ColorTargetState {
-                    format:     surface_format,
+                    format:     wgpu::TextureFormat::Rgba8Unorm,
                     blend:      None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -579,6 +583,7 @@ impl Histogram {
         });
 
         let (hdr_texture, hdr_texture_view) = Self::make_hdr_texture(device, width, height);
+        let (canvas_texture, canvas_texture_view) = Self::make_canvas_texture(device, width, height);
 
         // ---- cached bind groups ----
         let cached_sim_bg = Self::make_sim_bg(
@@ -629,11 +634,13 @@ impl Histogram {
             blit_sampler,
             hdr_texture,
             hdr_texture_view,
+            canvas_texture,
+            canvas_texture_view,
             max_density_buf,
             max_readback_buf,
             max_map_ready: Arc::new(AtomicBool::new(false)),
             max_map_inflight: false,
-            last_max_density: 1,
+            last_max_density: 1024,
             last_max_speed:   1,
             cached_sim_bg,
             cached_de_h_bg,
@@ -666,6 +673,10 @@ impl Histogram {
         let (hdr_texture, hdr_texture_view) = Self::make_hdr_texture(device, width, height);
         self.hdr_texture      = hdr_texture;
         self.hdr_texture_view = hdr_texture_view;
+
+        let (canvas_texture, canvas_texture_view) = Self::make_canvas_texture(device, width, height);
+        self.canvas_texture      = canvas_texture;
+        self.canvas_texture_view = canvas_texture_view;
 
         self.cached_sim_bg = Self::make_sim_bg(
             device, &self.sim_bind_layout,
@@ -730,7 +741,7 @@ impl Histogram {
             &self.de_h_texture_view, &self.accum_buf, &self.composite_params_buf,
             &self.gradient_a_texture_view, &self.gradient_b_texture_view, &self.gradient_sampler,
         );
-        self.last_max_density = 1;
+        self.last_max_density = 1024;
     }
 
     // ---- gradient texture uploads ----
@@ -905,6 +916,24 @@ impl Histogram {
         (tex, view)
     }
 
+    fn make_canvas_texture(device: &wgpu::Device, width: u32, height: u32)
+        -> (wgpu::Texture, wgpu::TextureView)
+    {
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label:           Some("canvas_texture"),
+            size:            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count:    1,
+            dimension:       wgpu::TextureDimension::D2,
+            format:          wgpu::TextureFormat::Rgba8Unorm,
+            usage:           wgpu::TextureUsages::RENDER_ATTACHMENT
+                           | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats:    &[],
+        });
+        let view = tex.create_view(&Default::default());
+        (tex, view)
+    }
+
     fn make_gradient_texture(device: &wgpu::Device, label: &str)
         -> (wgpu::Texture, wgpu::TextureView)
     {
@@ -950,10 +979,11 @@ impl Histogram {
     /// `SIM_STEPS_PER_DISPATCH` Euler steps and splats them into the histogram.
     pub fn dispatch_sim(
         &self,
-        queue:     &wgpu::Queue,
-        encoder:   &mut wgpu::CommandEncoder,
-        view_proj: Mat4,
-        config:    &AttractorConfig,
+        queue:           &wgpu::Queue,
+        encoder:         &mut wgpu::CommandEncoder,
+        view_proj:       Mat4,
+        config:          &AttractorConfig,
+        noise_magnitude: f32,
     ) {
         let ss_w = self.width  * self.ss_scale;
         let ss_h = self.height * self.ss_scale;
@@ -969,6 +999,11 @@ impl Histogram {
             p[44] = seed[0];
             p[45] = seed[1];
             p[46] = seed[2];
+        }
+        // p[47] = noise_magnitude: screen-space jitter in pixels, read by all sim shaders
+        // as params.p[11].w.  Only written when attractor params don't use that slot.
+        if n <= 47 {
+            p[47] = noise_magnitude;
         }
 
         queue.write_buffer(&self.sim_params_buf, 0, bytemuck::bytes_of(&SimParams {
@@ -993,7 +1028,7 @@ impl Histogram {
     pub fn clear(&mut self, encoder: &mut wgpu::CommandEncoder) {
         encoder.clear_buffer(&self.accum_buf, 0, None);
         encoder.clear_buffer(&self.max_density_buf, 0, None);
-        self.last_max_density = 1;
+        self.last_max_density = 1024;
         self.last_max_speed   = 1;
         // Do NOT touch max_map_inflight / max_map_ready here.
     }
@@ -1006,6 +1041,7 @@ impl Histogram {
         encoder:     &mut wgpu::CommandEncoder,
         params:      CompositeParams,
         render_mode: RenderMode,
+        bg_color:    wgpu::Color,
     ) {
         queue.write_buffer(&self.composite_params_buf, 0, bytemuck::bytes_of(&params));
 
@@ -1042,7 +1078,7 @@ impl Histogram {
                     view:           &self.hdr_texture_view,
                     resolve_target: None,
                     ops:            wgpu::Operations {
-                        load:  wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load:  wgpu::LoadOp::Clear(bg_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -1076,6 +1112,17 @@ impl Histogram {
         rpass.draw(0..3, 0..1);
     }
 
+    /// Blit the HDR intermediate to the canvas texture (Rgba8Unorm).
+    /// Call once per frame after `composite()`.
+    pub fn blit_to_canvas(&self, encoder: &mut wgpu::CommandEncoder) {
+        self.blit(encoder, &self.canvas_texture_view);
+    }
+
+    /// Returns the canvas texture view for registration with `egui_wgpu::Renderer`.
+    pub fn canvas_view(&self) -> &wgpu::TextureView {
+        &self.canvas_texture_view
+    }
+
     pub fn encode_max_readback(&self, encoder: &mut wgpu::CommandEncoder) {
         if self.max_map_inflight { return; }
         encoder.copy_buffer_to_buffer(&self.max_density_buf, 0, &self.max_readback_buf, 0, 8);
@@ -1101,8 +1148,8 @@ impl Histogram {
             self.max_readback_buf.unmap();
             self.max_map_ready.store(false, Ordering::Release);
             self.max_map_inflight = false;
-            if density > 0 { self.last_max_density = density; }
-            if speed   > 0 { self.last_max_speed   = speed;   }
+            if density > 0 { self.last_max_density = self.last_max_density.max(density); }
+            if speed   > 0 { self.last_max_speed   = self.last_max_speed.max(speed);     }
         }
     }
 }
@@ -1280,7 +1327,7 @@ fn make_lorenz_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = (
                     x + a * dt * (y - x),
@@ -1337,7 +1384,7 @@ fn make_lorenz84_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = (
                     x + dt * (-a * x - y * y - z * z + a * f),
@@ -1395,7 +1442,7 @@ fn make_rossler_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = (
                     x + dt * (-y - z),
@@ -1449,7 +1496,7 @@ fn make_thomas_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = (
                     x + dt * (-b * x + y.sin()),
@@ -1523,7 +1570,7 @@ fn make_map_states_icon(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = icon_step(x, y);
                 if nx.is_finite() && ny.is_finite() {
@@ -1591,7 +1638,7 @@ fn make_map_states_icon_b(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = icon_b_step(x, y);
                 if nx.is_finite() && ny.is_finite() {
@@ -1653,27 +1700,54 @@ where
 }
 
 /// Generic state generator for discrete maps.
-/// Probes multiple initial conditions to find one inside the basin of attraction,
-/// then generates `num` states spaced 50 steps apart along the attractor.
+/// Finds a valid basin point, then spawns 32 independent groups each perturbed
+/// from that seed and warmed up separately, so trajectories diverge quickly for
+/// chaotic maps and sample different orbit phases for quasi-periodic ones.
 fn make_map_states<F>(num: u32, params: &[f32], extra_steps: u64, f: F) -> Vec<[f32; 4]>
 where
     F: Fn(&[f32], f32, f32, f32) -> (f32, f32, f32),
 {
     const INTER: u32 = 50;
-    let (mut x, mut y, mut z) = probe_map_seed(&f, params);
-    for _ in 0..extra_steps {
-        let (nx, ny, nz) = f(params, x, y, z);
-        if nx.is_finite() && ny.is_finite() && nz.is_finite() {
-            (x, y, z) = (nx, ny, nz);
-        }
-    }
+    const WARM: u32  = 500;
+    const NUM_GROUPS: u32 = 32;
+    let per_group = (num + NUM_GROUPS - 1) / NUM_GROUPS;
+
+    let base = probe_map_seed(&f, params);
     let mut states = Vec::with_capacity(num as usize);
-    while states.len() < num as usize {
-        states.push([x, y, z, 0.0]);
-        for _ in 0..INTER {
+
+    for g in 0..NUM_GROUPS {
+        // Each group starts from a slightly different perturbation of the base seed so
+        // that chaotic maps diverge to independent regions while quasi-periodic ones
+        // sample different phases of the same invariant set.
+        let mut rng = (g.wrapping_add(1)).wrapping_mul(0x9E3779B9u32);
+        let scale = 1e-3_f32;
+        let (mut x, mut y, mut z) = (
+            base.0 + rng_f32(&mut rng) * scale,
+            base.1 + rng_f32(&mut rng) * scale,
+            base.2 + rng_f32(&mut rng) * scale,
+        );
+        for _ in 0..WARM {
             let (nx, ny, nz) = f(params, x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() {
                 (x, y, z) = (nx, ny, nz);
+            } else {
+                (x, y, z) = base;
+            }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = f(params, x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                (x, y, z) = (nx, ny, nz);
+            }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = f(params, x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() {
+                    (x, y, z) = (nx, ny, nz);
+                }
             }
         }
     }
@@ -1731,7 +1805,7 @@ fn make_chaotic_flow_states(num: u32, params: &[f32], extra_steps: u64, rng_seed
         }
         for _ in 0..per_group {
             if states.len() >= num as usize { break; }
-            states.push([x, y, z, 0.0]);
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
             for _ in 0..INTER {
                 let (nx, ny, nz) = step(x, y, z);
                 if nx.is_finite() && ny.is_finite() && nz.is_finite() {

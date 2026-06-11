@@ -67,6 +67,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var x = states[traj].x;
     var y = states[traj].y;
     var z = states[traj].z;
+    var rng = bitcast<u32>(states[traj].w);
+    if rng == 0u { rng = traj + 1u; }
 
     let m0  = params.p[0].x; let m1  = params.p[0].y; let m2  = params.p[0].z; let m3  = params.p[0].w;
     let m4  = params.p[1].x; let m5  = params.p[1].y; let m6  = params.p[1].z; let m7  = params.p[1].w;
@@ -121,10 +123,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let fy = (1.0 - (ndc.y * 0.5 + 0.5)) * f32(params.ss_height);
         if fx < 0.0 || fy < 0.0 { continue; }
 
-        let px0 = i32(fx);
-        let py0 = i32(fy);
-        let ddx = fract(fx);
-        let ddy = fract(fy);
+        rng ^= rng << 13u; rng ^= rng >> 17u; rng ^= rng << 5u;
+        let noise_m = params.p[11].w;
+        let fx_n = fx + (f32(rng >> 16u) / 32768.0 - 1.0) * noise_m;
+        let fy_n = fy + (f32(rng & 0xFFFFu) / 32768.0 - 1.0) * noise_m;
+        let px0 = i32(fx_n);
+        let py0 = i32(fy_n);
+        let ddx = fract(fx_n);
+        let ddy = fract(fy_n);
 
         let w00 = u32((1.0 - ddx) * (1.0 - ddy) * WEIGHT_SCALE);
         let w10 = u32(       ddx  * (1.0 - ddy) * WEIGHT_SCALE);
@@ -142,5 +148,5 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         splat_pixel(px0 + 1, py0 + 1, w11, sc11);
     }
 
-    states[traj] = vec4<f32>(x, y, z, 0.0);
+    states[traj] = vec4<f32>(x, y, z, bitcast<f32>(rng));
 }

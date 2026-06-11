@@ -26,6 +26,7 @@ struct CompositeParams {
     ss_scale:        u32,
     blend_mode:      u32,
     max_speed_enc:   u32,
+    alpha_power:     f32,
 }
 
 @group(0) @binding(0) var<storage, read> accum  : array<u32>;
@@ -64,7 +65,12 @@ fn block_density(dpx: i32, dpy: i32) -> f32 {
             total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u]);
         }
     }
-    return total / WEIGHT_SCALE;
+    // Divide by ss_scale² to get per-SS-pixel average density, consistent with
+    // log_max_density which tracks the max of a single SS pixel.  Without this,
+    // block_density is ss_scale²× too large, inflating density_01 and squeezing
+    // the entire attractor into the upper portion of the gradient range.
+    let ss = f32(params.ss_scale);
+    return total / WEIGHT_SCALE / (ss * ss);
 }
 
 fn block_speed(dpx: i32, dpy: i32) -> f32 {
@@ -79,28 +85,31 @@ fn block_speed(dpx: i32, dpy: i32) -> f32 {
             total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u + 1u]);
         }
     }
-    return total / WEIGHT_SCALE;
+    // Same ss_scale² normalisation as block_density so spd/d ratio stays correct.
+    let ss = f32(params.ss_scale);
+    return total / WEIGHT_SCALE / (ss * ss);
 }
 
 @fragment
-fn fs_main(in: VertOut) -> @location(0) vec2<f32> {
+fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let px = u32(in.uv.x * f32(params.width));
     let py = u32((1.0 - in.uv.y) * f32(params.height));
     if px >= params.width || py >= params.height {
-        return vec2<f32>(0.0, 0.0);
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
 
     let x = i32(px);
     let y = i32(py);
 
-    if params.log_max_density <= 0.0 { return vec2<f32>(0.0, 0.0); }
+    if params.log_max_density <= 0.0 { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 
     // 3-point horizontal average so isolated speckle peaks don't suppress their own blur kernel.
     let centre = (block_density(x - 1, y) + block_density(x, y) + block_density(x + 1, y)) / 3.0;
     // Density-relative sigma: sparse pixels get max_sigma, the densest pixel gets min_sigma.
     // Scales automatically as the render accumulates — more samples → lower sigma everywhere.
     let density_01   = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
-    let sigma        = mix(params.max_sigma, params.min_sigma, density_01);
+    // Floor at 1e-4 so σ=0 (no-blur mode) doesn't produce NaN via 0.5/(σ²)=∞.
+    let sigma        = max(mix(params.max_sigma, params.min_sigma, density_01), 1e-4);
     // Speed channel floored at 1.5 px so fine-grain speed noise stays blurred.
     let speed_sigma  = max(sigma, 1.5);
     let inv_s2       = 0.5 / (sigma * sigma);
@@ -112,8 +121,15 @@ fn fs_main(in: VertOut) -> @location(0) vec2<f32> {
 
     // Horizontal blur — density and speed use separate kernels.
     // Loop over the wider speed radius; density only accumulates within its own radius.
+    // Channel B stores pow(density_01, alpha_power) blurred horizontally.  Applying the
+    // power BEFORE blurring lets dense pixels spread their large alpha values outward,
+    // creating a 3–6 px soft glow at the attractor boundary instead of a hard cutoff.
+    // Isolated low-density hits stay invisible because their small pow(d_01, n) value
+    // is further diluted by the Gaussian kernel — speckle protection comes from the
+    // last_max_density floor (1024) ensuring sparse first-hit pixels have d_01 ≈ 0.1.
     var weighted_d = 0.0;
     var weighted_s = 0.0;
+    var weighted_a = 0.0;
     var total_w_d  = 0.0;
     var total_w_s  = 0.0;
     for (var dx = -speed_radius; dx <= speed_radius; dx++) {
@@ -125,13 +141,17 @@ fn fs_main(in: VertOut) -> @location(0) vec2<f32> {
         weighted_s += mean_s * w_s;
         total_w_s  += w_s;
         if abs(dx) <= radius {
-            let w_d = exp(-f32(dx * dx) * inv_s2);
+            let w_d   = exp(-f32(dx * dx) * inv_s2);
             weighted_d += log_d * w_d;
             total_w_d  += w_d;
+            let d_01   = clamp(log_d, 0.0, 1.0);
+            weighted_a += pow(d_01, params.alpha_power) * w_d;
         }
     }
-    return vec2<f32>(
+    return vec4<f32>(
         weighted_d / max(total_w_d, 1e-6),
         clamp(weighted_s / max(total_w_s, 1e-6), 0.0, 1.0),
+        weighted_a / max(total_w_d, 1e-6),
+        0.0,
     );
 }

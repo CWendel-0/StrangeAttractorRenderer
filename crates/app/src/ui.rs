@@ -14,12 +14,26 @@ pub struct UiState {
     pub attractor:  AttractorConfig,
     pub brightness: f32,
     pub gamma:      f32,
-    pub max_sigma:  f32,
-    pub min_sigma:  f32,
+    pub max_sigma:   f32,
+    pub min_sigma:   f32,
+    pub alpha_power:      f32,
+    pub noise_magnitude:  f32,
     pub ss_scale:   u32,
     pub dirty:          bool,
     pub type_changed:   bool,
     pub search_requested: bool,
+
+    pub canvas_width:  u32,
+    pub canvas_height: u32,
+    pub canvas_dirty:  bool,
+    pub expanded:      bool,
+
+    // Camera input forwarded from the canvas widget each frame.
+    pub viewport_drag_left:   egui::Vec2,
+    pub viewport_drag_middle: egui::Vec2,
+    pub viewport_scroll:      f32,
+
+    pub bg_color: egui::Color32,
 
     // ---- render mode ----
     pub render_mode: RenderMode,
@@ -36,20 +50,31 @@ pub struct UiState {
 
     attractor_open: bool,
     pub show_metrics: bool,
+    pub iter_count:   u64,
 }
 
 impl UiState {
-    pub fn new() -> Self {
+    pub fn new(canvas_width: u32, canvas_height: u32) -> Self {
         Self {
             attractor:  AttractorConfig::new(AttractorType::default()),
             brightness: 1.1,
             gamma:      0.95,
-            max_sigma:  1.0,
-            min_sigma:  0.3,
+            max_sigma:   1.0,
+            min_sigma:   0.3,
+            alpha_power:     2.0,
+            noise_magnitude: 0.0,
             ss_scale:   2,
             dirty:            false,
             type_changed:     false,
             search_requested: false,
+            canvas_width,
+            canvas_height,
+            canvas_dirty: false,
+            expanded:     false,
+            viewport_drag_left:   egui::Vec2::ZERO,
+            viewport_drag_middle: egui::Vec2::ZERO,
+            viewport_scroll:      0.0,
+            bg_color: egui::Color32::BLACK,
             render_mode: RenderMode::Light,
             gradient_a:       Gradient::density_default(),
             gradient_b:       Gradient::speed_default(),
@@ -60,13 +85,17 @@ impl UiState {
             selected_stop_b: None,
             attractor_open: true,
             show_metrics: true,
+            iter_count:   0,
         }
     }
 
-    pub fn show(&mut self, ctx: &Context, searching: bool, metrics: Option<(f32, f32)>) {
+    pub fn show(&mut self, ctx: &Context, searching: bool, metrics: Option<(f32, f32)>, canvas_tex_id: Option<egui::TextureId>) {
         self.dirty = false;
         self.type_changed = false;
         self.search_requested = false;
+        self.viewport_drag_left   = egui::Vec2::ZERO;
+        self.viewport_drag_middle = egui::Vec2::ZERO;
+        self.viewport_scroll      = 0.0;
 
         // ---- Floating attractor + parameters window ----
         egui::Window::new("Attractor")
@@ -253,9 +282,32 @@ impl UiState {
                 });
 
                 ui.separator();
+                ui.label("Canvas size");
+                ui.horizontal(|ui| {
+                    let mut cw = self.canvas_width as i32;
+                    let mut ch = self.canvas_height as i32;
+                    let wc = ui.add_enabled(!self.expanded, egui::DragValue::new(&mut cw).range(64..=4096).speed(1.0)).changed();
+                    ui.label("×");
+                    let hc = ui.add_enabled(!self.expanded, egui::DragValue::new(&mut ch).range(64..=4096).speed(1.0)).changed();
+                    if wc || hc {
+                        self.canvas_width  = (cw as u32).max(64);
+                        self.canvas_height = (ch as u32).max(64);
+                        self.canvas_dirty  = true;
+                    }
+                    let expand_label = if self.expanded { "Collapse" } else { "Expand" };
+                    if ui.button(expand_label).clicked() {
+                        self.expanded = !self.expanded;
+                    }
+                });
+
+                ui.separator();
                 ui.label("Display");
                 ui.add(egui::Slider::new(&mut self.brightness, 0.1..=5.0).text("Brightness"));
                 ui.add(egui::Slider::new(&mut self.gamma, 0.5..=4.0).text("Gamma"));
+                ui.horizontal(|ui| {
+                    ui.label("Background");
+                    ui.color_edit_button_srgba(&mut self.bg_color);
+                });
                 ui.checkbox(&mut self.show_metrics, "Show λ₁ / D_KY");
 
                 ui.separator();
@@ -269,16 +321,26 @@ impl UiState {
                 ui.separator();
                 ui.label("Blur (Density Estimation)");
                 ui.add(
-                    egui::Slider::new(&mut self.max_sigma, 0.1..=5.0)
+                    egui::Slider::new(&mut self.max_sigma, 0.0..=5.0)
                         .text("Max blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
                 ui.add(
-                    egui::Slider::new(&mut self.min_sigma, 0.05..=2.0)
+                    egui::Slider::new(&mut self.min_sigma, 0.0..=2.0)
                         .text("Min blur σ")
                         .clamping(egui::SliderClamping::Always),
                 );
                 self.min_sigma = self.min_sigma.min(self.max_sigma);
+                ui.add(
+                    egui::Slider::new(&mut self.alpha_power, 1.0..=10.0)
+                        .text("Alpha power")
+                        .clamping(egui::SliderClamping::Always),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.noise_magnitude, 0.0..=3.0)
+                        .text("Noise (px)")
+                        .clamping(egui::SliderClamping::Always),
+                );
 
                 if self.render_mode == RenderMode::Light {
                     ui.separator();
@@ -318,6 +380,70 @@ impl UiState {
                     }
                 }
             });
+
+        // ---- Floating canvas window ----
+        if let Some(tex_id) = canvas_tex_id {
+            // When expanded, the canvas fills the area not claimed by panels.
+            // ctx.available_rect() here is post-side-panel, so it's the central area.
+            if self.expanded {
+                let avail = ctx.available_rect();
+                // Account for window title bar (~20px) and inner margin (~6px each side).
+                let new_w = (avail.width()  - 12.0).max(64.0) as u32;
+                let new_h = (avail.height() - 32.0).max(64.0) as u32;
+                if new_w != self.canvas_width || new_h != self.canvas_height {
+                    self.canvas_width  = new_w;
+                    self.canvas_height = new_h;
+                    self.canvas_dirty  = true;
+                }
+            }
+
+            let base_window = egui::Window::new("Canvas")
+                .default_pos(egui::pos2(250.0, 10.0));
+
+            let window = if self.expanded {
+                let avail = ctx.available_rect();
+                base_window
+                    .fixed_pos(avail.min)
+                    .fixed_size(avail.size())
+                    .resizable(false)
+            } else {
+                base_window.resizable(true)
+            };
+
+            window.show(ctx, |ui| {
+                egui::ScrollArea::both().drag_to_scroll(false).show(ui, |ui| {
+                    let img = egui::Image::new(egui::load::SizedTexture::new(
+                        tex_id,
+                        [self.canvas_width as f32, self.canvas_height as f32],
+                    ))
+                    .sense(egui::Sense::drag());
+
+                    let resp = ui.add(img);
+
+                    // Left-button drag on the image → rotate.
+                    // Sense::drag() makes the Image widget claim the drag before the
+                    // ScrollArea can see it; the scrollbar thumbs are separate widgets
+                    // and still respond normally.
+                    if resp.dragged_by(egui::PointerButton::Primary) {
+                        self.viewport_drag_left = resp.drag_delta();
+                    }
+
+                    // Middle-button drag → pan
+                    if resp.hovered() || resp.dragged() {
+                        ui.input(|i| {
+                            if i.pointer.button_down(egui::PointerButton::Middle) {
+                                self.viewport_drag_middle = i.pointer.delta();
+                            }
+                            // Scroll wheel → zoom
+                            let scroll = i.smooth_scroll_delta.y;
+                            if scroll != 0.0 {
+                                self.viewport_scroll = scroll;
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         // ---- Bottom-left metrics overlay ----
         if self.show_metrics {
@@ -364,8 +490,34 @@ impl UiState {
                                     );
                                 }
                             }
+                            // iter count always shown
+                            {
+                                let w = egui::Color32::WHITE;
+                                let m = |s: &str| egui::RichText::new(s).monospace().color(w);
+                                egui::Grid::new("iter_grid")
+                                    .num_columns(3)
+                                    .spacing([4.0, 2.0])
+                                    .show(ui, |ui| {
+                                        ui.label(m("iter"));
+                                        ui.label(m("="));
+                                        ui.label(m(&fmt_iters(self.iter_count)));
+                                        ui.end_row();
+                                    });
+                            }
                         });
                 });
         }
+    }
+}
+
+fn fmt_iters(n: u64) -> String {
+    if n >= 1_000_000_000 {
+        format!("{:.2}B", n as f64 / 1_000_000_000.0)
+    } else if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        format!("{}", n)
     }
 }

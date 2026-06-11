@@ -23,6 +23,7 @@ struct CompositeParams {
     ss_scale:        u32,
     blend_mode:      u32,
     max_speed_enc:   u32,
+    alpha_power:     f32,
 }
 
 // de_h_tex: the R32Float intermediate written by the horizontal pass.
@@ -64,7 +65,8 @@ fn block_density(dpx: i32, dpy: i32) -> f32 {
             total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u]);
         }
     }
-    return total / WEIGHT_SCALE;
+    let ss = f32(params.ss_scale);
+    return total / WEIGHT_SCALE / (ss * ss);
 }
 
 @fragment
@@ -86,28 +88,32 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let centre = (block_density(x, y - 1) + block_density(x, y) + block_density(x, y + 1)) / 3.0;
     // Density-relative sigma: matches the horizontal pass formula.
     let density_01 = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
-    let sigma      = mix(params.max_sigma, params.min_sigma, density_01);
+    let sigma      = max(mix(params.max_sigma, params.min_sigma, density_01), 1e-4);
     let inv_s2 = 0.5 / (sigma * sigma);
     let radius = min(i32(ceil(sigma * 3.0)), MAX_RADIUS);
 
     // Vertical 1D Gaussian over the horizontally-blurred intermediate texture.
-    var weighted = 0.0;
-    var total_w  = 0.0;
+    // Channel R: blurred log-density (for color).  Channel B: blurred density³ (for alpha).
+    var weighted   = 0.0;
+    var weighted_a = 0.0;
+    var total_w    = 0.0;
     for (var dy = -radius; dy <= radius; dy++) {
         let row = y + dy;
         var d = 0.0;
+        var a = 0.0;
         if row >= 0 && u32(row) < params.height {
-            d = textureLoad(de_h_tex, vec2<i32>(x, row), 0).r;
+            let tex = textureLoad(de_h_tex, vec2<i32>(x, row), 0);
+            d = tex.r;
+            a = tex.b;
         }
-        let w = exp(-f32(dy * dy) * inv_s2);
-        weighted += d * w;
-        total_w  += w;
+        let w   = exp(-f32(dy * dy) * inv_s2);
+        weighted   += d * w;
+        weighted_a += a * w;
+        total_w    += w;
     }
-    // de_h_tex values are already log-mapped to [0,1]; brightness scales the output.
-    // Multiply by density_01 again: changes curve from density^(1/γ) to density^(1+1/γ),
-    // so isolated sparse pixels fade to near-black rather than appearing at ~30% brightness.
-    let blurred_log  = weighted / max(total_w, 1e-6);
+    let blurred_log  = weighted   / max(total_w, 1e-6);
     let brightness01 = clamp(blurred_log, 0.0, 1.0);
-    let v = clamp(pow(brightness01, 1.0 / params.gamma) * brightness01 * params.brightness, 0.0, 1.0);
-    return vec4<f32>(v, v, v, 1.0);
+    let fg           = clamp(pow(brightness01, 1.0 / params.gamma) * params.brightness, 0.0, 1.0);
+    let alpha = clamp(weighted_a / max(total_w, 1e-6), 0.0, 1.0);
+    return vec4<f32>(vec3<f32>(fg * alpha), alpha);
 }

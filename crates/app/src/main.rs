@@ -32,7 +32,7 @@ struct GpuState {
 }
 
 impl GpuState {
-    async fn new(window: Arc<Window>, initial_config: &AttractorConfig) -> Self {
+    async fn new(window: Arc<Window>, initial_config: &AttractorConfig, canvas_w: u32, canvas_h: u32) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -89,7 +89,7 @@ impl GpuState {
         surface.configure(&device, &config);
 
         let histogram = Histogram::new(
-            &device, &queue, size.width, size.height, format, initial_config,
+            &device, &queue, canvas_w, canvas_h, initial_config,
         );
 
         let egui_renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
@@ -105,7 +105,6 @@ impl GpuState {
         self.config.width  = new_size.width;
         self.config.height = new_size.height;
         self.surface.configure(&self.device, &self.config);
-        self.histogram.resize(&self.device, new_size.width, new_size.height);
     }
 }
 
@@ -137,6 +136,8 @@ struct App {
 
     frames_accumulated: u32,
     reseed_count:       u32,
+
+    canvas_tex_id: Option<egui::TextureId>,
 }
 
 impl App {
@@ -158,6 +159,7 @@ impl App {
             lyapunov_metrics: None,
             frames_accumulated: 0,
             reseed_count:       0,
+            canvas_tex_id: None,
         }
     }
 }
@@ -172,11 +174,14 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
 
-        let init_config = AttractorConfig::new(AttractorType::default());
-        let gpu = block_on(GpuState::new(Arc::clone(&window), &init_config));
+        let size     = window.inner_size();
+        let canvas_w = (size.width  / 2).max(64);
+        let canvas_h = (size.height / 2).max(64);
 
-        let size   = window.inner_size();
-        let aspect = size.width as f32 / size.height.max(1) as f32;
+        let init_config = AttractorConfig::new(AttractorType::default());
+        let mut gpu = block_on(GpuState::new(Arc::clone(&window), &init_config, canvas_w, canvas_h));
+
+        let aspect = canvas_w as f32 / canvas_h.max(1) as f32;
 
         let (bb_min, bb_max) = init_config.estimate_bounds_cpu();
         self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
@@ -190,7 +195,14 @@ impl ApplicationHandler for App {
             None,
         );
 
-        self.ui = Some(UiState::new());
+        let canvas_tex_id = gpu.egui_renderer.register_native_texture(
+            &gpu.device,
+            gpu.histogram.canvas_view(),
+            wgpu::FilterMode::Linear,
+        );
+        self.canvas_tex_id = Some(canvas_tex_id);
+
+        self.ui = Some(UiState::new(canvas_w, canvas_h));
 
         self.window     = Some(window);
         self.gpu        = Some(gpu);
@@ -205,7 +217,19 @@ impl ApplicationHandler for App {
     ) {
         if let (Some(state), Some(window)) = (&mut self.egui_state, &self.window) {
             let resp = state.on_window_event(window, &event);
-            if resp.consumed { return; }
+            if resp.consumed {
+                // Button releases must still clear camera flags even when egui
+                // consumed the event — otherwise the release is silently dropped
+                // and the camera stays locked in rotate/pan mode indefinitely.
+                if let WindowEvent::MouseInput { state: ElementState::Released, button, .. } = &event {
+                    match button {
+                        MouseButton::Left   => self.mouse_left = false,
+                        MouseButton::Middle => self.mouse_mid  = false,
+                        _ => {}
+                    }
+                }
+                return;
+            }
         }
 
         match event {
@@ -216,11 +240,7 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 if let Some(gpu) = &mut self.gpu {
                     gpu.resize(size);
-                    self.camera.resize(size.width, size.height);
-                }
-                let actual_ss = self.gpu.as_ref().map(|g| g.histogram.ss_scale);
-                if let (Some(ss), Some(ui)) = (actual_ss, self.ui.as_mut()) {
-                    ui.ss_scale = ss;
+                    // canvas dimensions are user-controlled, not tied to window size
                 }
             }
 
@@ -293,8 +313,9 @@ impl App {
                     // the if-ui.dirty check runs, so we can't route through that flag.
                     gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
 
-                    let size   = window.inner_size();
-                    let aspect = size.width as f32 / size.height.max(1) as f32;
+                    let cw = gpu.histogram.width;
+                    let ch = gpu.histogram.height;
+                    let aspect = cw as f32 / ch.max(1) as f32;
                     self.camera = ArcballCamera::fit_aabb(aspect, result.bb_min, result.bb_max);
                     self.pending_clear = true;
                     search_result_received = true;
@@ -307,9 +328,26 @@ impl App {
         // ---- egui input + UI ----
         let raw_input = egui_state.take_egui_input(window);
         self.egui_ctx.begin_pass(raw_input);
-        ui.show(&self.egui_ctx, self.searching, self.lyapunov_metrics);
+        ui.show(&self.egui_ctx, self.searching, self.lyapunov_metrics, self.canvas_tex_id);
         let full_output = self.egui_ctx.end_pass();
         egui_state.handle_platform_output(window, full_output.platform_output.clone());
+
+        // ---- Canvas viewport input (drag/scroll forwarded from the Image widget) ----
+        {
+            let vp = Vec2::new(gpu.histogram.width as f32, gpu.histogram.height as f32);
+            if ui.viewport_drag_left != egui::Vec2::ZERO {
+                let d = ui.viewport_drag_left;
+                self.camera.rotate(Vec2::new(d.x, d.y), vp);
+            }
+            if ui.viewport_drag_middle != egui::Vec2::ZERO {
+                let d = ui.viewport_drag_middle;
+                self.camera.pan(Vec2::new(d.x, d.y), vp);
+            }
+            if ui.viewport_scroll != 0.0 {
+                let factor = if ui.viewport_scroll > 0.0 { 0.9 } else { 1.0 / 0.9 };
+                self.camera.zoom(factor);
+            }
+        }
 
         // ---- Search request handling ----
         if ui.search_requested {
@@ -329,8 +367,9 @@ impl App {
             self.search_worker = None;
             self.searching = false;
 
-            let size = window.inner_size();
-            let aspect = size.width as f32 / size.height.max(1) as f32;
+            let cw = gpu.histogram.width;
+            let ch = gpu.histogram.height;
+            let aspect = cw as f32 / ch.max(1) as f32;
             let (bb_min, bb_max) = ui.attractor.estimate_bounds_cpu();
             self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
         }
@@ -383,6 +422,23 @@ impl App {
             self.pending_clear = true;
         }
 
+        if ui.canvas_dirty {
+            let cw = ui.canvas_width.max(64);
+            let ch = ui.canvas_height.max(64);
+            gpu.histogram.resize(&gpu.device, cw, ch);
+            if let Some(id) = self.canvas_tex_id {
+                gpu.egui_renderer.update_egui_texture_from_wgpu_texture(
+                    &gpu.device,
+                    gpu.histogram.canvas_view(),
+                    wgpu::FilterMode::Linear,
+                    id,
+                );
+            }
+            self.camera.resize(cw, ch);
+            self.pending_clear = true;
+            ui.canvas_dirty = false;
+        }
+
         gpu.histogram.poll_max_density(&gpu.device);
 
         // Periodic reseed: every ~30 s inject a new set of 8 192 uniformly-sampled
@@ -414,43 +470,57 @@ impl App {
         if self.pending_clear {
             gpu.histogram.clear(&mut encoder);
             self.pending_clear = false;
+            ui.iter_count = 0;
         }
 
         let vp = self.camera.view_proj();
-        gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.attractor);
+        gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.attractor, ui.noise_magnitude);
+        ui.iter_count = ui.iter_count.saturating_add(
+            gpu::histogram::SIM_NUM_TRAJECTORIES as u64 * gpu::histogram::SIM_STEPS_PER_DISPATCH as u64
+        );
 
-        let w = gpu.config.width;
-        let h = gpu.config.height;
+        let cw = gpu.histogram.width;
+        let ch = gpu.histogram.height;
         const WEIGHT_SCALE: f32 = 1024.0;
         let ss = gpu.histogram.ss_scale;
-        let max_display = gpu.histogram.last_max_density as f32 / WEIGHT_SCALE * (ss * ss) as f32;
+        let max_display = gpu.histogram.last_max_density as f32 / WEIGHT_SCALE;
         let log_max = (max_display + 1.0).ln().max(1e-6);
         gpu.histogram.composite(
             &gpu.queue,
             &mut encoder,
             CompositeParams {
-                width:           w,
-                height:          h,
+                width:           cw,
+                height:          ch,
                 log_max_density: log_max,
                 brightness:      ui.brightness,
                 gamma:           ui.gamma,
-                ss_width:        w * ss,
-                ss_height:       h * ss,
+                ss_width:        cw * ss,
+                ss_height:       ch * ss,
                 max_sigma:       ui.max_sigma,
                 min_sigma:       ui.min_sigma,
                 ss_scale:        ss,
                 blend_mode:      ui.blend_mode.as_u32(),
                 max_speed_enc:   gpu.histogram.last_max_speed,
+                alpha_power:     ui.alpha_power,
             },
             ui.render_mode,
+            {
+                let c = ui.bg_color;
+                wgpu::Color {
+                    r: c.r() as f64 / 255.0,
+                    g: c.g() as f64 / 255.0,
+                    b: c.b() as f64 / 255.0,
+                    a: 1.0,
+                }
+            },
         );
 
-        gpu.histogram.blit(&mut encoder, &view);
+        gpu.histogram.blit_to_canvas(&mut encoder);
         gpu.histogram.encode_max_readback(&mut encoder);
 
         // ---- egui render pass ----
         let screen_desc = egui_wgpu::ScreenDescriptor {
-            size_in_pixels:    [w, h],
+            size_in_pixels:    [gpu.config.width, gpu.config.height],
             pixels_per_point:  window.scale_factor() as f32,
         };
         let tris = self.egui_ctx.tessellate(full_output.shapes, screen_desc.pixels_per_point);
@@ -467,7 +537,7 @@ impl App {
                         view:           &view,
                         resolve_target: None,
                         ops:            wgpu::Operations {
-                            load:  wgpu::LoadOp::Load,
+                            load:  wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
                     })],

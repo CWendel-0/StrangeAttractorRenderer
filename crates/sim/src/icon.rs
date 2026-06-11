@@ -11,12 +11,12 @@ use crate::attractor::{Attractor, ParamDesc, ParamKind, Point};
 //   z' = sqrt(x² + y²)    (radius as 3-D depth channel)
 
 const DESCS: &[ParamDesc] = &[
-    ParamDesc { name: "degree", kind: ParamKind::Integer,    min: 2.0, max: 10.0, default: 7.0   },
-    ParamDesc { name: "alpha",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -2.535},
-    ParamDesc { name: "beta",   kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -0.669},
-    ParamDesc { name: "lambda", kind: ParamKind::Continuous, min: -4.0, max: 4.0, default:  2.402},
-    ParamDesc { name: "gamma",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default:  0.179},
-    ParamDesc { name: "omega",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -0.452},
+    ParamDesc { name: "degree", kind: ParamKind::Integer,    min: 2.0, max: 10.0, default: 5.0   },
+    ParamDesc { name: "alpha",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -1.408},
+    ParamDesc { name: "beta",   kind: ParamKind::Continuous, min: -4.0, max: 4.0, default:  0.533},
+    ParamDesc { name: "lambda", kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -1.056},
+    ParamDesc { name: "gamma",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default: -3.775},
+    ParamDesc { name: "omega",  kind: ParamKind::Continuous, min: -4.0, max: 4.0, default:  0.324},
 ];
 
 pub struct Icon {

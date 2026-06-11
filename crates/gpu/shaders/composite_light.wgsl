@@ -26,6 +26,7 @@ struct CompositeParams {
     ss_scale:        u32,
     blend_mode:      u32,
     max_speed_enc:   u32,
+    alpha_power:     f32,
 }
 
 @group(0) @binding(0) var de_h_tex             : texture_2d<f32>;
@@ -67,7 +68,8 @@ fn block_density(dpx: i32, dpy: i32) -> f32 {
             total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u]);
         }
     }
-    return total / WEIGHT_SCALE;
+    let ss = f32(params.ss_scale);
+    return total / WEIGHT_SCALE / (ss * ss);
 }
 
 // Sample a 256×1 gradient texture at t ∈ [0, 1] using a linear sampler.
@@ -127,7 +129,7 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let centre       = (block_density(x, y - 1) + block_density(x, y) + block_density(x, y + 1)) / 3.0;
     // Density-relative sigma: matches the horizontal pass formula.
     let density_01   = clamp(log(centre + 1.0) / max(params.log_max_density, 0.001), 0.0, 1.0);
-    let sigma        = mix(params.max_sigma, params.min_sigma, density_01);
+    let sigma        = max(mix(params.max_sigma, params.min_sigma, density_01), 1e-4);
     let speed_sigma  = max(sigma, 1.5);
     let inv_s2       = 0.5 / (sigma * sigma);
     let speed_inv_s2 = 0.5 / (speed_sigma * speed_sigma);
@@ -135,26 +137,32 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
     let speed_radius = min(i32(ceil(speed_sigma * 3.0)), MAX_RADIUS);
 
     // Vertical 1D Gaussian — density and speed use separate kernels (same floor logic as de_h).
+    // Channel B carries blurred density³ from the horizontal pass; blur it vertically here
+    // so alpha = blur(blur(density³)): sparse pixels are suppressed before spreading.
     var weighted     = 0.0;
     var weighted_spd = 0.0;
+    var weighted_a   = 0.0;
     var total_w      = 0.0;
     var total_w_s    = 0.0;
     for (var dy = -speed_radius; dy <= speed_radius; dy++) {
         let row = y + dy;
         var d = 0.0;
         var s = 0.0;
+        var a = 0.0;
         if row >= 0 && u32(row) < params.height {
             let tex = textureLoad(de_h_tex, vec2<i32>(x, row), 0);
             d = tex.r;
             s = tex.g;
+            a = tex.b;
         }
         let w_s = exp(-f32(dy * dy) * speed_inv_s2);
         weighted_spd += s * w_s;
         total_w_s    += w_s;
         if abs(dy) <= radius {
             let w = exp(-f32(dy * dy) * inv_s2);
-            weighted += d * w;
-            total_w  += w;
+            weighted   += d * w;
+            weighted_a += a * w;
+            total_w    += w;
         }
     }
     let blurred_log   = weighted     / max(total_w, 1e-6);
@@ -245,7 +253,7 @@ fn fs_main(in: VertOut) -> @location(0) vec4<f32> {
         }
     }
 
-    // Fade by density_01: isolated sparse pixels approach background rather than ~30% brightness.
-    let v = pow(clamp(blended * params.brightness, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / params.gamma));
-    return vec4<f32>(v * grad_density_01, 1.0);
+    let v     = pow(clamp(blended * params.brightness, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / params.gamma));
+    let alpha = clamp(weighted_a / max(total_w, 1e-6), 0.0, 1.0);
+    return vec4<f32>(v * alpha, alpha);
 }
