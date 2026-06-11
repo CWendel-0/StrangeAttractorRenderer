@@ -45,6 +45,16 @@ rotate the camera, tweak parameters, or change the color gradient and
 watch the attractor reshape and re-render at interactive frame rates,
 even while millions of new points are being accumulated every second.
 
+## Sample images produced
+These sample images were made entirely within the program, and rendered
+in a matter of a few (less than 5) seconds.
+
+<img width="1108" height="768" alt="ColorfulPickover" src="https://github.com/user-attachments/assets/a66bc3c7-0962-4aa0-9823-900d31511280" />
+<img width="2214" height="1258" alt="ZoomedInLorenz" src="https://github.com/user-attachments/assets/1a4a188a-0665-4ded-bdcd-2d6a12c1f294" />
+<img width="692" height="763" alt="Polysin" src="https://github.com/user-attachments/assets/a046058a-3304-4768-996a-6fb1e12443bd" />
+<img width="1025" height="1011" alt="Icon" src="https://github.com/user-attachments/assets/edfe938b-3913-41ce-80ea-7c45115423ba" />
+<img width="631" height="1046" alt="GreenPolySin" src="https://github.com/user-attachments/assets/eef0e728-7be3-4fda-8d3d-00b89ff5f25b" />
+
 ## Supported attractors
 
 | Type | Params | Notes |
@@ -102,6 +112,7 @@ cargo run --release
 The binary is `strange-attractor` (workspace crate `app`).
 
 ## Project layout
+
 
 - `crates/sim` — attractor definitions (CPU-side parameter
   descriptors, defaults, bounds estimation, Lyapunov/search workers)
