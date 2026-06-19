@@ -8,6 +8,7 @@ fn sprott_num_terms(order: usize) -> usize {
 }
 
 use crate::gradient::{Gradient, gradient_editor};
+use crate::movie::{MovieStatus, OutputKind};
 use crate::velocity_slider::velocity_slider;
 
 pub struct UiState {
@@ -55,6 +56,21 @@ pub struct UiState {
     attractor_open: bool,
     pub show_metrics: bool,
     pub iter_count:   u64,
+
+    // ---- Movie render dialog ----
+    pub movie_dialog_open:       bool,
+    pub movie_keyframe_paths:    Vec<std::path::PathBuf>,
+    pub movie_frames_per_step:   u32,
+    pub movie_iters_per_frame:   u64,
+    pub movie_loop_back:         bool,
+    pub movie_output_kind:       OutputKind,
+    pub movie_output_path:       Option<std::path::PathBuf>,
+    pub movie_fps:                u32,
+    pub movie_render_requested:  bool,
+    pub movie_cancel_requested:  bool,
+    pub movie_close_requested:   bool,
+    pub movie_job_active:        bool,
+    pub movie_status_for_ui:     Option<MovieStatus>,
 }
 
 impl UiState {
@@ -94,6 +110,20 @@ impl UiState {
             attractor_open: true,
             show_metrics: true,
             iter_count:   0,
+
+            movie_dialog_open:      false,
+            movie_keyframe_paths:   Vec::new(),
+            movie_frames_per_step:  30,
+            movie_iters_per_frame:  50_000_000,
+            movie_loop_back:        false,
+            movie_output_kind:      OutputKind::PngSequence,
+            movie_output_path:      None,
+            movie_fps:              30,
+            movie_render_requested: false,
+            movie_cancel_requested: false,
+            movie_close_requested:  false,
+            movie_job_active:       false,
+            movie_status_for_ui:    None,
         }
     }
 
@@ -104,6 +134,9 @@ impl UiState {
         self.save_requested   = false;
         self.save_state_requested = false;
         self.load_state_requested = false;
+        self.movie_render_requested = false;
+        self.movie_cancel_requested = false;
+        self.movie_close_requested  = false;
         self.viewport_drag_left   = egui::Vec2::ZERO;
         self.viewport_drag_middle = egui::Vec2::ZERO;
         self.viewport_scroll      = 0.0;
@@ -125,11 +158,19 @@ impl UiState {
                         self.load_state_requested = true;
                         ui.close_menu();
                     }
+                    ui.separator();
+                    if ui.button("Render Movie…").clicked() {
+                        self.movie_dialog_open = true;
+                        ui.close_menu();
+                    }
                 });
             });
         });
 
+        self.show_movie_dialog(ctx);
+
         // ---- Floating attractor + parameters window ----
+        if !self.movie_job_active {
         egui::Window::new("Attractor")
             .open(&mut self.attractor_open)
             .resizable(true)
@@ -290,8 +331,10 @@ impl UiState {
                         });
                 }
             });
+        }
 
         // ---- Sidebar: rendering / display controls only ----
+        if !self.movie_job_active {
         egui::SidePanel::left("render_panel")
             .resizable(true)
             .default_width(240.0)
@@ -418,6 +461,7 @@ impl UiState {
                     }
                 }
             });
+        }
 
         // ---- Floating canvas window ----
         if let Some(tex_id) = canvas_tex_id {
@@ -544,6 +588,148 @@ impl UiState {
                             }
                         });
                 });
+        }
+    }
+
+    fn show_movie_dialog(&mut self, ctx: &Context) {
+        if !self.movie_dialog_open {
+            return;
+        }
+        let mut open = self.movie_dialog_open;
+        let job_active = self.movie_job_active;
+        egui::Window::new("Render Movie")
+            .open(&mut open)
+            .resizable(true)
+            .default_width(360.0)
+            .show(ctx, |ui| {
+                if job_active {
+                    self.show_movie_progress(ui);
+                } else {
+                    self.show_movie_setup(ui);
+                }
+            });
+        self.movie_dialog_open = open;
+    }
+
+    fn show_movie_setup(&mut self, ui: &mut egui::Ui) {
+        ui.label("Keyframes (in order):");
+        let mut remove_idx = None;
+        for (i, path) in self.movie_keyframe_paths.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(format!("{}.", i + 1));
+                let name = path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string());
+                ui.label(name);
+                if ui.small_button("✕").clicked() {
+                    remove_idx = Some(i);
+                }
+            });
+        }
+        if let Some(i) = remove_idx {
+            self.movie_keyframe_paths.remove(i);
+        }
+        if ui.button("Add Keyframe(s)…").clicked() {
+            if let Some(paths) = rfd::FileDialog::new()
+                .set_title("Add Keyframe State Files")
+                .add_filter("Attractor State", &["json"])
+                .pick_files()
+            {
+                self.movie_keyframe_paths.extend(paths);
+            }
+        }
+
+        ui.separator();
+        ui.add(egui::DragValue::new(&mut self.movie_frames_per_step).range(1..=600).prefix("Frames/step: "));
+        ui.add(egui::DragValue::new(&mut self.movie_iters_per_frame).range(1..=2_000_000_000u64).prefix("Iterations/frame: "));
+        ui.checkbox(&mut self.movie_loop_back, "Loop back to first keyframe");
+
+        ui.separator();
+        let prev_output_kind = self.movie_output_kind;
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.movie_output_kind, OutputKind::PngSequence, "PNG Sequence");
+            ui.selectable_value(&mut self.movie_output_kind, OutputKind::Gif, "GIF");
+            ui.selectable_value(&mut self.movie_output_kind, OutputKind::Mp4, "MP4");
+        });
+        if self.movie_output_kind != prev_output_kind {
+            // The previously chosen path's extension/kind (folder vs. file) no
+            // longer matches — force re-picking rather than silently reusing a
+            // stale path with the wrong extension.
+            self.movie_output_path = None;
+        }
+        if self.movie_output_kind != OutputKind::PngSequence {
+            ui.add(egui::DragValue::new(&mut self.movie_fps).range(1..=120).prefix("FPS: "));
+        }
+
+        ui.horizontal(|ui| {
+            ui.label("Output:");
+            let label = self.movie_output_path.as_deref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "(none)".to_string());
+            ui.label(label);
+            if ui.button("Choose…").clicked() {
+                self.movie_output_path = match self.movie_output_kind {
+                    OutputKind::PngSequence => rfd::FileDialog::new()
+                        .set_title("Choose Output Folder")
+                        .pick_folder(),
+                    OutputKind::Gif => rfd::FileDialog::new()
+                        .set_title("Save GIF")
+                        .set_file_name("movie.gif")
+                        .add_filter("GIF", &["gif"])
+                        .save_file(),
+                    OutputKind::Mp4 => rfd::FileDialog::new()
+                        .set_title("Save MP4")
+                        .set_file_name("movie.mp4")
+                        .add_filter("MP4", &["mp4"])
+                        .save_file(),
+                };
+            }
+        });
+
+        if let Some(MovieStatus::Error(msg)) = &self.movie_status_for_ui {
+            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), msg);
+        }
+
+        let enough_keyframes = self.movie_keyframe_paths.len() >= 2;
+        let has_output = self.movie_output_path.is_some();
+        if ui.add_enabled(enough_keyframes && has_output, egui::Button::new("Render")).clicked() {
+            self.movie_render_requested = true;
+        }
+    }
+
+    fn show_movie_progress(&mut self, ui: &mut egui::Ui) {
+        match self.movie_status_for_ui.clone() {
+            Some(MovieStatus::Rendering { frame_index, total_frames }) => {
+                let frac = if total_frames > 0 { frame_index as f32 / total_frames as f32 } else { 0.0 };
+                ui.add(egui::ProgressBar::new(frac).text(format!("{frame_index}/{total_frames}")));
+                if ui.button("Cancel").clicked() {
+                    self.movie_cancel_requested = true;
+                }
+            }
+            Some(MovieStatus::Encoding) => {
+                ui.label("Encoding…");
+            }
+            Some(MovieStatus::Done(path)) => {
+                ui.label(format!("Done: {}", path.display()));
+                if ui.button("Close").clicked() {
+                    self.movie_close_requested = true;
+                }
+            }
+            Some(MovieStatus::Error(msg)) => {
+                ui.colored_label(egui::Color32::from_rgb(255, 100, 100), &msg);
+                if ui.button("Close").clicked() {
+                    self.movie_close_requested = true;
+                }
+            }
+            Some(MovieStatus::Cancelled) => {
+                ui.label("Cancelled.");
+                if ui.button("Close").clicked() {
+                    self.movie_close_requested = true;
+                }
+            }
+            None => {
+                ui.label("Starting…");
+            }
         }
     }
 }

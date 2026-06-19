@@ -13,6 +13,27 @@ pub struct CameraState {
     pub fov_y:    f32,
 }
 
+impl CameraState {
+    /// Interpolate two camera states: linear for target/distance/fov_y,
+    /// spherical for rotation (so the view rotates along the shortest arc).
+    pub fn lerp(a: &CameraState, b: &CameraState, t: f32) -> CameraState {
+        let t = t.clamp(0.0, 1.0);
+        let qa = Quat::from_xyzw(a.rotation[0], a.rotation[1], a.rotation[2], a.rotation[3]);
+        let qb = Quat::from_xyzw(b.rotation[0], b.rotation[1], b.rotation[2], b.rotation[3]);
+        let q = qa.slerp(qb, t);
+        CameraState {
+            target: [
+                a.target[0] + (b.target[0] - a.target[0]) * t,
+                a.target[1] + (b.target[1] - a.target[1]) * t,
+                a.target[2] + (b.target[2] - a.target[2]) * t,
+            ],
+            distance: a.distance + (b.distance - a.distance) * t,
+            rotation: [q.x, q.y, q.z, q.w],
+            fov_y: a.fov_y + (b.fov_y - a.fov_y) * t,
+        }
+    }
+}
+
 pub struct ArcballCamera {
     target:   Vec3,
     distance: f32,

@@ -1,5 +1,6 @@
 mod camera;
 mod gradient;
+mod movie;
 mod state;
 mod ui;
 mod velocity_slider;
@@ -30,6 +31,23 @@ const ZOOM_STEP: f32 = 0.95;
 
 fn zoom_factor_from_scroll(scroll: f32) -> f32 {
     ZOOM_STEP.powf(scroll.clamp(-5.0, 5.0))
+}
+
+/// Applies the linear→sRGB transfer function to the RGB channels of an RGBA8
+/// buffer in place, matching what egui's sRGB display path already does, so
+/// saved images match what's on screen.
+fn srgb_encode_pixels(pixels: &mut [u8]) {
+    for chunk in pixels.chunks_mut(4) {
+        for ch in &mut chunk[0..3] {
+            let f = *ch as f32 / 255.0;
+            let s = if f <= 0.003_130_8 {
+                f * 12.92
+            } else {
+                1.055 * f.powf(1.0 / 2.4) - 0.055
+            };
+            *ch = (s.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        }
+    }
 }
 
 // ---- GPU state -------------------------------------------------------------
@@ -152,6 +170,8 @@ struct App {
 
     canvas_tex_id:      Option<egui::TextureId>, // Rgba8Unorm view  → egui shows sRGB
     canvas_tex_id_raw:  Option<egui::TextureId>, // Rgba8UnormSrgb view → egui shows linear
+
+    movie_job: Option<movie::MovieJob>,
 }
 
 impl App {
@@ -176,6 +196,7 @@ impl App {
             reseed_count:       0,
             canvas_tex_id:     None,
             canvas_tex_id_raw: None,
+            movie_job: None,
         }
     }
 }
@@ -362,6 +383,7 @@ impl App {
         }
 
         // ---- egui input + UI ----
+        ui.movie_job_active = self.movie_job.is_some();
         let raw_input = egui_state.take_egui_input(window);
         self.egui_ctx.begin_pass(raw_input);
         let active_tex_id = if ui.color_space_srgb { self.canvas_tex_id } else { self.canvas_tex_id_raw };
@@ -465,6 +487,20 @@ impl App {
             self.lyapunov_worker = Some(LyapunovWorker::spawn(ui.attractor.clone()));
         }
 
+        // ---- Movie job: cancel / start the next interpolated frame ----
+        if let Some(job) = &mut self.movie_job {
+            if ui.movie_cancel_requested {
+                job.cancel();
+            }
+            if matches!(job.status(), movie::MovieStatus::Rendering { .. }) && !job.frame_started() {
+                let interpolated = job.current_interpolated_state();
+                interpolated.apply(ui, &mut self.camera);
+                gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
+                self.pending_clear = true;
+                job.mark_frame_started();
+            }
+        }
+
         if ui.gradient_a_dirty {
             gpu.histogram.upload_gradient_a(&gpu.queue, &ui.gradient_a.to_rgba8());
             ui.gradient_a_dirty = false;
@@ -526,10 +562,12 @@ impl App {
         // distinct from the previous batch (512 × phase >> Lyapunov time for all
         // built-in attractors, giving statistically independent samples).
         const RESEED_INTERVAL: u32 = 200; // ~30 s at 60 fps
-        self.frames_accumulated = if self.pending_clear { 0 } else { self.frames_accumulated + 1 };
-        if self.frames_accumulated > 0 && self.frames_accumulated % RESEED_INTERVAL == 0 {
-            gpu.histogram.reseed_trajectories(&gpu.queue, &ui.attractor, self.reseed_count);
-            self.reseed_count = self.reseed_count.wrapping_add(1);
+        if self.movie_job.is_none() {
+            self.frames_accumulated = if self.pending_clear { 0 } else { self.frames_accumulated + 1 };
+            if self.frames_accumulated > 0 && self.frames_accumulated % RESEED_INTERVAL == 0 {
+                gpu.histogram.reseed_trajectories(&gpu.queue, &ui.attractor, self.reseed_count);
+                self.reseed_count = self.reseed_count.wrapping_add(1);
+            }
         }
 
         // ---- GPU frame ----
@@ -637,6 +675,25 @@ impl App {
 
         gpu.histogram.submit_max_readback();
 
+        // ---- Movie job: per-frame completion ----
+        if let Some(job) = &mut self.movie_job {
+            if let movie::MovieStatus::Rendering { .. } = job.status() {
+                if job.iter_target_reached(ui.iter_count) {
+                    let (w, h, mut pixels) = gpu.histogram.read_canvas_pixels(&gpu.device, &gpu.queue);
+                    if ui.color_space_srgb {
+                        srgb_encode_pixels(&mut pixels);
+                    }
+                    let path = job.frame_filename();
+                    if let Err(e) = image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8) {
+                        job.fail(format!("Failed to write frame {}: {e}", path.display()));
+                    } else if job.advance_frame() {
+                        job.run_encode();
+                    }
+                }
+            }
+            ui.movie_status_for_ui = Some(job.status().clone());
+        }
+
         if ui.save_requested {
             let ts = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -657,17 +714,7 @@ impl App {
                 // so apply the same encoding to RGB channels before saving.
                 // In linear mode the raw values are saved as-is to match the display.
                 if ui.color_space_srgb {
-                    for chunk in pixels.chunks_mut(4) {
-                        for ch in &mut chunk[0..3] {
-                            let f = *ch as f32 / 255.0;
-                            let s = if f <= 0.003_130_8 {
-                                f * 12.92
-                            } else {
-                                1.055 * f.powf(1.0 / 2.4) - 0.055
-                            };
-                            *ch = (s.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-                        }
-                    }
+                    srgb_encode_pixels(&mut pixels);
                 }
                 match image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8) {
                     Ok(()) => log::info!("Saved {}", path.display()),
@@ -714,6 +761,42 @@ impl App {
                     Err(e) => log::error!("Failed to load state: {e}"),
                 }
             }
+        }
+
+        if ui.movie_render_requested {
+            let mut keyframes = Vec::with_capacity(ui.movie_keyframe_paths.len());
+            let mut load_error = None;
+            for path in &ui.movie_keyframe_paths {
+                match SceneState::load_from_file(path) {
+                    Ok(s) => keyframes.push(s),
+                    Err(e) => {
+                        load_error = Some(format!("Failed to load {}: {e}", path.display()));
+                        break;
+                    }
+                }
+            }
+            match load_error {
+                Some(e) => ui.movie_status_for_ui = Some(movie::MovieStatus::Error(e)),
+                None => {
+                    let settings = movie::MovieSettings {
+                        frames_per_step: ui.movie_frames_per_step,
+                        iters_per_frame: ui.movie_iters_per_frame,
+                        loop_back:       ui.movie_loop_back,
+                        output_kind:     ui.movie_output_kind,
+                        fps:             ui.movie_fps,
+                    };
+                    let output_path = ui.movie_output_path.clone().unwrap_or_default();
+                    match movie::MovieJob::new(keyframes, settings, output_path) {
+                        Ok(job) => self.movie_job = Some(job),
+                        Err(e) => ui.movie_status_for_ui = Some(movie::MovieStatus::Error(e)),
+                    }
+                }
+            }
+        }
+
+        if ui.movie_close_requested {
+            self.movie_job = None;
+            ui.movie_status_for_ui = None;
         }
     }
 }

@@ -175,6 +175,31 @@ impl Gradient {
         }
     }
 
+    /// Interpolate two gradients by resampling both at evenly spaced positions
+    /// and lerping the resulting colors, returning a new gradient with those
+    /// samples as stops. This sidesteps needing matching stop counts/positions
+    /// between `a` and `b`.
+    pub fn lerp(a: &Gradient, b: &Gradient, t: f32) -> Gradient {
+        const N: usize = 16;
+        let t = t.clamp(0.0, 1.0);
+        let stops = (0..N)
+            .map(|i| {
+                let pos = i as f32 / (N - 1) as f32;
+                let ca = a.sample(pos);
+                let cb = b.sample(pos);
+                ColorStop {
+                    pos,
+                    rgb: [
+                        lerp_u8(ca[0], cb[0], t),
+                        lerp_u8(ca[1], cb[1], t),
+                        lerp_u8(ca[2], cb[2], t),
+                    ],
+                }
+            })
+            .collect();
+        Gradient { stops, interp_mode: InterpMode::Srgb }
+    }
+
     /// Rasterize to a 256-texel RGBA8 row (width=256, height=1).
     pub fn to_rgba8(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(256 * 4);
