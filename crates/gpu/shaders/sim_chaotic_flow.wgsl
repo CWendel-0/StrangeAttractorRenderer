@@ -59,6 +59,18 @@ fn eval_v(op: u32, x: f32, y: f32, z: f32) -> f32 {
     return 1.0;
 }
 
+// Deterministic per-trajectory hash used to seed divergence recovery so every
+// trajectory recovers to a distinct point. Without this, trajectories that
+// diverge and share a small modulus would warm up to bit-identical states and
+// splat duplicate points into the histogram for the rest of the render.
+fn recovery_hash(seed: u32) -> f32 {
+    var h = seed;
+    h ^= h >> 16u; h *= 0x7feb352du;
+    h ^= h >> 15u; h *= 0x846ca68bu;
+    h ^= h >> 16u;
+    return f32(h) / 4294967295.0;
+}
+
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let traj = gid.x;
@@ -96,7 +108,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         x = nx; y = ny; z = nz;
 
         if abs(x) > 1e4 || abs(y) > 1e4 || abs(z) > 1e4 {
-            x = 0.0; y = 0.1 + f32(traj % 32u) * 0.02; z = 0.0;
+            // Every coordinate is derived from a differently-salted hash of the
+            // full trajectory index, so the recovered state is unique per
+            // trajectory (see recovery_hash above).
+            x = (recovery_hash(traj) - 0.5) * 0.1;
+            y = 0.1 + recovery_hash(traj ^ 0x9E3779B9u) * 0.64;
+            z = (recovery_hash(traj ^ 0x85EBCA6Bu) - 0.5) * 0.1;
             for (var w = 0u; w < 500u; w++) {
                 let wx = x; let wy = y; let wz = z;
                 let wvx = m0*eval_v(op0,wx,wy,wz)*wx + m1*eval_v(op1,wx,wy,wz)*wy

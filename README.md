@@ -5,7 +5,7 @@ strange attractors. It integrates millions of trajectory points per
 second on the GPU, accumulates them into a density histogram, and
 composites the result into a smooth, anti-aliased image with
 density-estimation blur, color gradients, and live Lyapunov-exponent
-analysis.
+and fractal dimension analysis.
 
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-blue)
@@ -32,7 +32,7 @@ On top of the raw density data, the renderer applies:
   Gaussian blur (à la Hamilton/Apophysis-style fractal flame rendering)
   that smooths sparse regions while keeping dense regions sharp.
 - **Supersampling** (1×/2×/4×) for clean edges.
-- **Two independent color gradients** (Oklab/OKLCh interpolated) — one
+- **Two independent color gradients** (RGB/Oklab/OKLCh interpolated) — one
   mapped to point density, one to local trajectory speed — combined
   with a choice of 14 blend modes (Add, Multiply, Screen, Overlay,
   Color Dodge, etc.), or a classic monochrome log-density mode.

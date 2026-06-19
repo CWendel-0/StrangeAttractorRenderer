@@ -1,4 +1,17 @@
 use glam::{Mat4, Quat, Vec2, Vec3};
+use serde::{Deserialize, Serialize};
+
+/// Plain-data snapshot of camera orientation/position for save/load — kept
+/// decoupled from glam's types so the save-file format doesn't depend on
+/// glam's own serde representation. Aspect ratio is intentionally excluded:
+/// it's tied to the live canvas size, not something to restore from a file.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct CameraState {
+    pub target:   [f32; 3],
+    pub distance: f32,
+    pub rotation: [f32; 4], // quaternion x, y, z, w
+    pub fov_y:    f32,
+}
 
 pub struct ArcballCamera {
     target:   Vec3,
@@ -76,5 +89,24 @@ impl ArcballCamera {
         let view = Mat4::look_at_rh(eye, self.target, self.rotation * Vec3::Y);
         let proj = Mat4::perspective_rh(self.fov_y, self.aspect, 0.1, 10_000.0);
         proj * view
+    }
+
+    pub fn to_state(&self) -> CameraState {
+        CameraState {
+            target:   [self.target.x, self.target.y, self.target.z],
+            distance: self.distance,
+            rotation: [self.rotation.x, self.rotation.y, self.rotation.z, self.rotation.w],
+            fov_y:    self.fov_y,
+        }
+    }
+
+    /// Restore position/orientation from a saved state. The aspect ratio is
+    /// left untouched, since it's tied to the live canvas size.
+    pub fn apply_state(&mut self, s: &CameraState) {
+        self.target   = Vec3::new(s.target[0], s.target[1], s.target[2]);
+        self.distance = s.distance.clamp(1.0, 5000.0);
+        self.rotation = Quat::from_xyzw(s.rotation[0], s.rotation[1], s.rotation[2], s.rotation[3]).normalize();
+        self.fov_y    = s.fov_y;
+        self.dirty    = true;
     }
 }

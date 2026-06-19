@@ -16,8 +16,9 @@ use crate::poly_pow::PolyPow;
 use crate::poly_sin::PolySin;
 use crate::poly_sprott::PolySprott;
 use crate::attractor::Attractor;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Hash, Serialize, Deserialize)]
 pub enum AttractorType {
     #[default]
     Lorenz,
@@ -113,7 +114,7 @@ impl AttractorType {
     ];
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AttractorConfig {
     pub attractor_type: AttractorType,
     pub params:         Vec<f32>,

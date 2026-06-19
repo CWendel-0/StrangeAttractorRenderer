@@ -1,9 +1,11 @@
 mod camera;
 mod gradient;
+mod state;
 mod ui;
 mod velocity_slider;
 
 use camera::ArcballCamera;
+use state::SceneState;
 use ui::UiState;
 
 use gpu::histogram::{CompositeParams, Histogram};
@@ -17,8 +19,18 @@ use winit::{
     dpi::PhysicalSize,
     event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
+
+// Base multiplicative zoom step per unit of scroll. Scaling by the actual
+// scroll magnitude (instead of just its sign) keeps a single wheel "click"
+// gentle while still letting fast/heavy scrolling zoom further in one event.
+const ZOOM_STEP: f32 = 0.95;
+
+fn zoom_factor_from_scroll(scroll: f32) -> f32 {
+    ZOOM_STEP.powf(scroll.clamp(-5.0, 5.0))
+}
 
 // ---- GPU state -------------------------------------------------------------
 
@@ -121,6 +133,7 @@ struct App {
     mouse_pos:   Vec2,
     mouse_left:  bool,
     mouse_mid:   bool,
+    keys_down:   std::collections::HashSet<KeyCode>,
 
     // UI
     egui_ctx:   egui::Context,
@@ -137,7 +150,8 @@ struct App {
     frames_accumulated: u32,
     reseed_count:       u32,
 
-    canvas_tex_id: Option<egui::TextureId>,
+    canvas_tex_id:      Option<egui::TextureId>, // Rgba8Unorm view  → egui shows sRGB
+    canvas_tex_id_raw:  Option<egui::TextureId>, // Rgba8UnormSrgb view → egui shows linear
 }
 
 impl App {
@@ -149,6 +163,7 @@ impl App {
             mouse_pos: Vec2::ZERO,
             mouse_left: false,
             mouse_mid:  false,
+            keys_down:  std::collections::HashSet::new(),
             egui_ctx:   egui::Context::default(),
             egui_state: None,
             ui:         None,
@@ -159,7 +174,8 @@ impl App {
             lyapunov_metrics: None,
             frames_accumulated: 0,
             reseed_count:       0,
-            canvas_tex_id: None,
+            canvas_tex_id:     None,
+            canvas_tex_id_raw: None,
         }
     }
 }
@@ -200,7 +216,13 @@ impl ApplicationHandler for App {
             gpu.histogram.canvas_view(),
             wgpu::FilterMode::Linear,
         );
-        self.canvas_tex_id = Some(canvas_tex_id);
+        let canvas_tex_id_raw = gpu.egui_renderer.register_native_texture(
+            &gpu.device,
+            gpu.histogram.canvas_view_srgb(),
+            wgpu::FilterMode::Linear,
+        );
+        self.canvas_tex_id     = Some(canvas_tex_id);
+        self.canvas_tex_id_raw = Some(canvas_tex_id_raw);
 
         self.ui = Some(UiState::new(canvas_w, canvas_h));
 
@@ -244,6 +266,21 @@ impl ApplicationHandler for App {
                 }
             }
 
+            WindowEvent::Focused(false) => {
+                // Drop held keys on focus loss — a key released while the window
+                // wasn't focused would otherwise appear stuck down forever.
+                self.keys_down.clear();
+            }
+
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let PhysicalKey::Code(code) = event.physical_key {
+                    match event.state {
+                        ElementState::Pressed  => { self.keys_down.insert(code); }
+                        ElementState::Released => { self.keys_down.remove(&code); }
+                    }
+                }
+            }
+
             WindowEvent::MouseInput { state, button, .. } => {
                 match button {
                     MouseButton::Left   => self.mouse_left = state == ElementState::Pressed,
@@ -270,8 +307,7 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::LineDelta(_, y)  => y,
                     MouseScrollDelta::PixelDelta(p)    => p.y as f32 * 0.01,
                 };
-                let factor = if scroll > 0.0 { 0.9 } else { 1.0 / 0.9 };
-                self.camera.zoom(factor);
+                self.camera.zoom(zoom_factor_from_scroll(scroll));
             }
 
             WindowEvent::RedrawRequested => {
@@ -328,7 +364,8 @@ impl App {
         // ---- egui input + UI ----
         let raw_input = egui_state.take_egui_input(window);
         self.egui_ctx.begin_pass(raw_input);
-        ui.show(&self.egui_ctx, self.searching, self.lyapunov_metrics, self.canvas_tex_id);
+        let active_tex_id = if ui.color_space_srgb { self.canvas_tex_id } else { self.canvas_tex_id_raw };
+        ui.show(&self.egui_ctx, self.searching, self.lyapunov_metrics, active_tex_id);
         let full_output = self.egui_ctx.end_pass();
         egui_state.handle_platform_output(window, full_output.platform_output.clone());
 
@@ -344,9 +381,36 @@ impl App {
                 self.camera.pan(Vec2::new(d.x, d.y), vp);
             }
             if ui.viewport_scroll != 0.0 {
-                let factor = if ui.viewport_scroll > 0.0 { 0.9 } else { 1.0 / 0.9 };
-                self.camera.zoom(factor);
+                self.camera.zoom(zoom_factor_from_scroll(ui.viewport_scroll));
             }
+        }
+
+        // ---- Keyboard camera controls: WASD rotate, arrows pan, +/- zoom ----
+        // Skipped while a UI widget wants keyboard focus (e.g. editing a DragValue),
+        // so typing into a parameter field doesn't also spin the camera.
+        if !self.egui_ctx.wants_keyboard_input() {
+            let vp = Vec2::new(gpu.histogram.width as f32, gpu.histogram.height as f32);
+            const ROTATE_SPEED: f32 = 6.0;
+            const PAN_SPEED:    f32 = 6.0;
+
+            let mut rotate_delta = Vec2::ZERO;
+            if self.keys_down.contains(&KeyCode::KeyW) { rotate_delta.y -= ROTATE_SPEED; }
+            if self.keys_down.contains(&KeyCode::KeyS) { rotate_delta.y += ROTATE_SPEED; }
+            if self.keys_down.contains(&KeyCode::KeyA) { rotate_delta.x -= ROTATE_SPEED; }
+            if self.keys_down.contains(&KeyCode::KeyD) { rotate_delta.x += ROTATE_SPEED; }
+            if rotate_delta != Vec2::ZERO { self.camera.rotate(rotate_delta, vp); }
+
+            let mut pan_delta = Vec2::ZERO;
+            if self.keys_down.contains(&KeyCode::ArrowUp)    { pan_delta.y -= PAN_SPEED; }
+            if self.keys_down.contains(&KeyCode::ArrowDown)  { pan_delta.y += PAN_SPEED; }
+            if self.keys_down.contains(&KeyCode::ArrowLeft)  { pan_delta.x -= PAN_SPEED; }
+            if self.keys_down.contains(&KeyCode::ArrowRight) { pan_delta.x += PAN_SPEED; }
+            if pan_delta != Vec2::ZERO { self.camera.pan(pan_delta, vp); }
+
+            let zoom_in  = self.keys_down.contains(&KeyCode::Equal) || self.keys_down.contains(&KeyCode::NumpadAdd);
+            let zoom_out = self.keys_down.contains(&KeyCode::Minus) || self.keys_down.contains(&KeyCode::NumpadSubtract);
+            if zoom_in  { self.camera.zoom(zoom_factor_from_scroll(1.0)); }
+            if zoom_out { self.camera.zoom(zoom_factor_from_scroll(-1.0)); }
         }
 
         // ---- Search request handling ----
@@ -411,7 +475,14 @@ impl App {
         }
 
         if self.camera.dirty {
-            gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
+            // Only the screen-space projection changed — the attractor's 3D
+            // trajectories are unaffected and already well-distributed across
+            // it, so just clear the (now stale, projection-dependent) histogram
+            // and keep simulating the existing states under the new view.
+            // Re-seeding here would otherwise restart every trajectory from the
+            // same deterministic positions on every drag frame, which never lets
+            // the density accumulate and biases the picture toward whatever the
+            // fixed initial seed happens to hit first.
             self.pending_clear = true;
             self.camera.dirty = false;
         }
@@ -430,6 +501,14 @@ impl App {
                 gpu.egui_renderer.update_egui_texture_from_wgpu_texture(
                     &gpu.device,
                     gpu.histogram.canvas_view(),
+                    wgpu::FilterMode::Linear,
+                    id,
+                );
+            }
+            if let Some(id) = self.canvas_tex_id_raw {
+                gpu.egui_renderer.update_egui_texture_from_wgpu_texture(
+                    &gpu.device,
+                    gpu.histogram.canvas_view_srgb(),
                     wgpu::FilterMode::Linear,
                     id,
                 );
@@ -493,7 +572,7 @@ impl App {
                 height:          ch,
                 log_max_density: log_max,
                 brightness:      ui.brightness,
-                gamma:           ui.gamma,
+                gamma:           ui.gamma.max(1e-4),
                 ss_width:        cw * ss,
                 ss_height:       ch * ss,
                 max_sigma:       ui.max_sigma,
@@ -557,6 +636,85 @@ impl App {
         frame.present();
 
         gpu.histogram.submit_max_readback();
+
+        if ui.save_requested {
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let default_name = format!("attractor_{ts}.png");
+            // Blocks the event loop until the user picks a path or cancels —
+            // acceptable here since this only runs on an explicit user action.
+            let chosen_path = rfd::FileDialog::new()
+                .set_title("Save Image")
+                .set_file_name(&default_name)
+                .add_filter("PNG Image", &["png"])
+                .save_file();
+
+            if let Some(path) = chosen_path {
+                let (w, h, mut pixels) = gpu.histogram.read_canvas_pixels(&gpu.device, &gpu.queue);
+                // In sRGB mode egui applies a linear→sRGB transfer before the display,
+                // so apply the same encoding to RGB channels before saving.
+                // In linear mode the raw values are saved as-is to match the display.
+                if ui.color_space_srgb {
+                    for chunk in pixels.chunks_mut(4) {
+                        for ch in &mut chunk[0..3] {
+                            let f = *ch as f32 / 255.0;
+                            let s = if f <= 0.003_130_8 {
+                                f * 12.92
+                            } else {
+                                1.055 * f.powf(1.0 / 2.4) - 0.055
+                            };
+                            *ch = (s.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                        }
+                    }
+                }
+                match image::save_buffer(&path, &pixels, w, h, image::ColorType::Rgba8) {
+                    Ok(()) => log::info!("Saved {}", path.display()),
+                    Err(e) => log::error!("Failed to save PNG: {e}"),
+                }
+            }
+        }
+
+        if ui.save_state_requested {
+            let chosen_path = rfd::FileDialog::new()
+                .set_title("Save State")
+                .set_file_name("attractor_state.json")
+                .add_filter("Attractor State", &["json"])
+                .save_file();
+            if let Some(path) = chosen_path {
+                let state = SceneState::capture(ui, &self.camera);
+                match state.save_to_file(&path) {
+                    Ok(()) => log::info!("Saved state to {}", path.display()),
+                    Err(e) => log::error!("Failed to save state: {e}"),
+                }
+            }
+        }
+
+        if ui.load_state_requested {
+            let chosen_path = rfd::FileDialog::new()
+                .set_title("Load State")
+                .add_filter("Attractor State", &["json"])
+                .pick_file();
+            if let Some(path) = chosen_path {
+                match SceneState::load_from_file(&path) {
+                    Ok(loaded) => {
+                        loaded.apply(ui, &mut self.camera);
+                        // Re-render from scratch with the loaded settings — the
+                        // histogram/image are intentionally not part of a saved
+                        // state, only the settings needed to reproduce it.
+                        gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
+                        self.pending_clear = true;
+                        self.search_worker = None;
+                        self.searching = false;
+                        self.lyapunov_metrics = None;
+                        self.lyapunov_worker = Some(LyapunovWorker::spawn(ui.attractor.clone()));
+                        log::info!("Loaded state from {}", path.display());
+                    }
+                    Err(e) => log::error!("Failed to load state: {e}"),
+                }
+            }
+        }
     }
 }
 

@@ -40,6 +40,18 @@ fn splat_pixel(px: i32, py: i32, weight: u32, speed_contrib: u32) {
     }
 }
 
+// Deterministic per-trajectory hash used to seed divergence recovery so every
+// trajectory recovers to a distinct point. Without this, trajectories that
+// diverge and share a small modulus would warm up to bit-identical states and
+// splat duplicate points into the histogram for the rest of the render.
+fn recovery_hash(seed: u32) -> f32 {
+    var h = seed;
+    h ^= h >> 16u; h *= 0x7feb352du;
+    h ^= h >> 15u; h *= 0x846ca68bu;
+    h ^= h >> 16u;
+    return f32(h) / 4294967295.0;
+}
+
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let traj = gid.x;
@@ -67,7 +79,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         x = nx; y = ny; z = nz;
 
         if abs(x) > 1e6 || abs(y) > 1e6 || abs(z) > 1e6 {
-            x = 0.1; y = 0.0; z = f32(traj % 256u) * 0.01;
+            // Every coordinate is derived from a differently-salted hash of the
+            // full trajectory index, so the recovered state is unique per
+            // trajectory (see recovery_hash above).
+            x = 0.1 + (recovery_hash(traj) - 0.5) * 0.2;
+            y = (recovery_hash(traj ^ 0x9E3779B9u) - 0.5) * 0.2;
+            z = recovery_hash(traj ^ 0x85EBCA6Bu) * 2.56;
             for (var w = 0u; w < 500u; w++) {
                 let wx = x; let wy = y; let wz = z;
                 x = wx + dt * (-wy - wz);

@@ -19,6 +19,18 @@ pub const SIM_NUM_TRAJECTORIES: u32 = 8_192;
 /// Euler steps each trajectory advances per compute dispatch (≈ one frame).
 pub const SIM_STEPS_PER_DISPATCH: u32 = 512;
 
+/// Initial / post-clear floor for `last_max_density`, in raw accum units
+/// (WEIGHT_SCALE = 1024 per fully-weighted hit). One dispatch alone splats
+/// `SIM_NUM_TRAJECTORIES * SIM_STEPS_PER_DISPATCH` ≈ 4.2M points, easily
+/// putting typical touched pixels into the tens-of-thousands of raw units
+/// within a single frame. The previous floor of 1024 (≈ one hit) was so far
+/// below that, that `density_01` in de_h.wgsl (which divides by log_max_density)
+/// overshot 1.0 and clamped on every frame immediately after a clear — making
+/// freshly-formed structure flash to full brightness before the real GPU
+/// readback caught up a frame or two later. This floor is sized to roughly
+/// match a typical first-frame peak so legitimate structure doesn't clamp.
+const INITIAL_MAX_DENSITY: u32 = 1 << 18; // 262_144 raw ≈ 256 weight-count units
+
 /// Composite HDR intermediate (luma before swapchain blit).
 const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
@@ -33,7 +45,7 @@ const GRADIENT_TEX_WIDTH: u32 = 256;
 // ---------------------------------------------------------------------------
 
 /// Which compositing mode to use when rendering.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, serde::Serialize, serde::Deserialize)]
 pub enum RenderMode {
     /// Monochrome log-density with DE blur (original mode).
     #[default]
@@ -44,7 +56,7 @@ pub enum RenderMode {
 
 /// How Gradient A (density) and Gradient B (speed) are combined in Light mode.
 /// Numeric value is written directly into `CompositeParams::blend_mode`.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, serde::Serialize, serde::Deserialize)]
 #[repr(u32)]
 pub enum BlendMode {
     #[default]
@@ -198,8 +210,9 @@ pub struct Histogram {
     hdr_texture_view: wgpu::TextureView,
 
     // ---- canvas output (Rgba8Unorm, TEXTURE_BINDING for egui display) ----
-    canvas_texture:      wgpu::Texture,
-    canvas_texture_view: wgpu::TextureView,
+    canvas_texture:           wgpu::Texture,
+    canvas_texture_view:      wgpu::TextureView,
+    canvas_texture_view_srgb: wgpu::TextureView,
 
     // ---- GPU max-density / max-speed readback ----
     max_density_buf:  wgpu::Buffer,
@@ -583,7 +596,7 @@ impl Histogram {
         });
 
         let (hdr_texture, hdr_texture_view) = Self::make_hdr_texture(device, width, height);
-        let (canvas_texture, canvas_texture_view) = Self::make_canvas_texture(device, width, height);
+        let (canvas_texture, canvas_texture_view, canvas_texture_view_srgb) = Self::make_canvas_texture(device, width, height);
 
         // ---- cached bind groups ----
         let cached_sim_bg = Self::make_sim_bg(
@@ -636,11 +649,12 @@ impl Histogram {
             hdr_texture_view,
             canvas_texture,
             canvas_texture_view,
+            canvas_texture_view_srgb,
             max_density_buf,
             max_readback_buf,
             max_map_ready: Arc::new(AtomicBool::new(false)),
             max_map_inflight: false,
-            last_max_density: 1024,
+            last_max_density: INITIAL_MAX_DENSITY,
             last_max_speed:   1,
             cached_sim_bg,
             cached_de_h_bg,
@@ -674,9 +688,10 @@ impl Histogram {
         self.hdr_texture      = hdr_texture;
         self.hdr_texture_view = hdr_texture_view;
 
-        let (canvas_texture, canvas_texture_view) = Self::make_canvas_texture(device, width, height);
-        self.canvas_texture      = canvas_texture;
-        self.canvas_texture_view = canvas_texture_view;
+        let (canvas_texture, canvas_texture_view, canvas_texture_view_srgb) = Self::make_canvas_texture(device, width, height);
+        self.canvas_texture           = canvas_texture;
+        self.canvas_texture_view      = canvas_texture_view;
+        self.canvas_texture_view_srgb = canvas_texture_view_srgb;
 
         self.cached_sim_bg = Self::make_sim_bg(
             device, &self.sim_bind_layout,
@@ -741,7 +756,7 @@ impl Histogram {
             &self.de_h_texture_view, &self.accum_buf, &self.composite_params_buf,
             &self.gradient_a_texture_view, &self.gradient_b_texture_view, &self.gradient_sampler,
         );
-        self.last_max_density = 1024;
+        self.last_max_density = INITIAL_MAX_DENSITY;
     }
 
     // ---- gradient texture uploads ----
@@ -917,7 +932,7 @@ impl Histogram {
     }
 
     fn make_canvas_texture(device: &wgpu::Device, width: u32, height: u32)
-        -> (wgpu::Texture, wgpu::TextureView)
+        -> (wgpu::Texture, wgpu::TextureView, wgpu::TextureView)
     {
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label:           Some("canvas_texture"),
@@ -927,11 +942,16 @@ impl Histogram {
             dimension:       wgpu::TextureDimension::D2,
             format:          wgpu::TextureFormat::Rgba8Unorm,
             usage:           wgpu::TextureUsages::RENDER_ATTACHMENT
-                           | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats:    &[],
+                           | wgpu::TextureUsages::TEXTURE_BINDING
+                           | wgpu::TextureUsages::COPY_SRC,
+            view_formats:    &[wgpu::TextureFormat::Rgba8UnormSrgb],
         });
-        let view = tex.create_view(&Default::default());
-        (tex, view)
+        let view_linear = tex.create_view(&Default::default());
+        let view_srgb   = tex.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
+            ..Default::default()
+        });
+        (tex, view_linear, view_srgb)
     }
 
     fn make_gradient_texture(device: &wgpu::Device, label: &str)
@@ -1028,7 +1048,7 @@ impl Histogram {
     pub fn clear(&mut self, encoder: &mut wgpu::CommandEncoder) {
         encoder.clear_buffer(&self.accum_buf, 0, None);
         encoder.clear_buffer(&self.max_density_buf, 0, None);
-        self.last_max_density = 1024;
+        self.last_max_density = INITIAL_MAX_DENSITY;
         self.last_max_speed   = 1;
         // Do NOT touch max_map_inflight / max_map_ready here.
     }
@@ -1121,6 +1141,61 @@ impl Histogram {
     /// Returns the canvas texture view for registration with `egui_wgpu::Renderer`.
     pub fn canvas_view(&self) -> &wgpu::TextureView {
         &self.canvas_texture_view
+    }
+
+    /// sRGB-interpreted view of the canvas — when egui samples this, the GPU
+    /// decodes values as sRGB→linear, neutralising egui's own linear→sRGB
+    /// re-encode, so the displayed result shows raw (unencoded) values.
+    pub fn canvas_view_srgb(&self) -> &wgpu::TextureView {
+        &self.canvas_texture_view_srgb
+    }
+
+    /// Read back the canvas texture to CPU as raw RGBA8 bytes.
+    /// Blocking — submits a copy and waits for the GPU to finish.
+    /// Returns `(width, height, rgba_pixels)`.
+    pub fn read_canvas_pixels(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> (u32, u32, Vec<u8>) {
+        let w = self.width;
+        let h = self.height;
+        let align        = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let unpadded_bpr = w * 4;
+        let padded_bpr   = (unpadded_bpr + align - 1) / align * align;
+
+        let staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label:              Some("canvas_readback"),
+            size:               (padded_bpr * h) as u64,
+            usage:              wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("canvas_readback_encoder"),
+        });
+        enc.copy_texture_to_buffer(
+            self.canvas_texture.as_image_copy(),
+            wgpu::ImageCopyBuffer {
+                buffer: &staging,
+                layout: wgpu::ImageDataLayout {
+                    offset:         0,
+                    bytes_per_row:  Some(padded_bpr),
+                    rows_per_image: None,
+                },
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+        queue.submit(std::iter::once(enc.finish()));
+
+        staging.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        device.poll(wgpu::Maintain::Wait);
+
+        let raw = staging.slice(..).get_mapped_range();
+        let mut pixels = Vec::with_capacity((w * h * 4) as usize);
+        for row in 0..h {
+            let start = (row * padded_bpr) as usize;
+            pixels.extend_from_slice(&raw[start..start + (unpadded_bpr as usize)]);
+        }
+        drop(raw);
+        staging.unmap();
+        (w, h, pixels)
     }
 
     pub fn encode_max_readback(&self, encoder: &mut wgpu::CommandEncoder) {

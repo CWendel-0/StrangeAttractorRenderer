@@ -1,5 +1,5 @@
 /// Color space used when interpolating between stops.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum InterpMode {
     Srgb,
     Oklab,
@@ -7,7 +7,7 @@ pub enum InterpMode {
 }
 
 /// A single color stop in a gradient.  `pos` is in [0.0, 1.0].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ColorStop {
     pub pos: f32,
     pub rgb: [u8; 3],
@@ -18,7 +18,7 @@ pub struct ColorStop {
 /// Invariants: `stops` is non-empty, sorted by `pos`, first stop always at 0.0,
 /// last stop always at 1.0.  These two endpoints are "fixed" — the editor
 /// does not allow the user to move or delete them.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Gradient {
     pub stops: Vec<ColorStop>,
     pub interp_mode: InterpMode,

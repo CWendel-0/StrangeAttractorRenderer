@@ -22,6 +22,10 @@ pub struct UiState {
     pub dirty:          bool,
     pub type_changed:   bool,
     pub search_requested: bool,
+    pub save_requested:   bool,
+    pub save_state_requested: bool,
+    pub load_state_requested: bool,
+    pub color_space_srgb: bool,
 
     pub canvas_width:  u32,
     pub canvas_height: u32,
@@ -67,6 +71,10 @@ impl UiState {
             dirty:            false,
             type_changed:     false,
             search_requested: false,
+            save_requested:   false,
+            save_state_requested: false,
+            load_state_requested: false,
+            color_space_srgb: true,
             canvas_width,
             canvas_height,
             canvas_dirty: false,
@@ -93,9 +101,33 @@ impl UiState {
         self.dirty = false;
         self.type_changed = false;
         self.search_requested = false;
+        self.save_requested   = false;
+        self.save_state_requested = false;
+        self.load_state_requested = false;
         self.viewport_drag_left   = egui::Vec2::ZERO;
         self.viewport_drag_middle = egui::Vec2::ZERO;
         self.viewport_scroll      = 0.0;
+
+        // ---- Menu bar ----
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Save Image…").clicked() {
+                        self.save_requested = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.button("Save State…").clicked() {
+                        self.save_state_requested = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("Load State…").clicked() {
+                        self.load_state_requested = true;
+                        ui.close_menu();
+                    }
+                });
+            });
+        });
 
         // ---- Floating attractor + parameters window ----
         egui::Window::new("Attractor")
@@ -281,6 +313,12 @@ impl UiState {
                     }
                 });
 
+                ui.label("Color space");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.color_space_srgb, true,  "sRGB");
+                    ui.selectable_value(&mut self.color_space_srgb, false, "Linear");
+                });
+
                 ui.separator();
                 ui.label("Canvas size");
                 ui.horizontal(|ui| {
@@ -303,7 +341,7 @@ impl UiState {
                 ui.separator();
                 ui.label("Display");
                 ui.add(egui::Slider::new(&mut self.brightness, 0.1..=5.0).text("Brightness"));
-                ui.add(egui::Slider::new(&mut self.gamma, 0.5..=4.0).text("Gamma"));
+                ui.add(egui::Slider::new(&mut self.gamma, 0.0..=4.0).text("Gamma"));
                 ui.horizontal(|ui| {
                     ui.label("Background");
                     ui.color_edit_button_srgba(&mut self.bg_color);
