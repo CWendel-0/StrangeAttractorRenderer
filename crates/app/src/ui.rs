@@ -66,6 +66,7 @@ pub struct UiState {
     pub movie_output_kind:       OutputKind,
     pub movie_output_path:       Option<std::path::PathBuf>,
     pub movie_fps:                u32,
+    pub movie_mp4_crf:            u8,
     pub movie_render_requested:  bool,
     pub movie_cancel_requested:  bool,
     pub movie_close_requested:   bool,
@@ -119,6 +120,7 @@ impl UiState {
             movie_output_kind:      OutputKind::PngSequence,
             movie_output_path:      None,
             movie_fps:              30,
+            movie_mp4_crf:          18,
             movie_render_requested: false,
             movie_cancel_requested: false,
             movie_close_requested:  false,
@@ -659,6 +661,13 @@ impl UiState {
         }
         if self.movie_output_kind != OutputKind::PngSequence {
             ui.add(egui::DragValue::new(&mut self.movie_fps).range(1..=120).prefix("FPS: "));
+        }
+        if self.movie_output_kind == OutputKind::Mp4 {
+            ui.add(
+                egui::Slider::new(&mut self.movie_mp4_crf, 0..=51)
+                    .text("Quality (CRF, lower = better)")
+                    .clamping(egui::SliderClamping::Always),
+            );
         }
 
         ui.horizontal(|ui| {

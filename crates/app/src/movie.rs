@@ -19,6 +19,10 @@ pub struct MovieSettings {
     pub loop_back: bool,
     pub output_kind: OutputKind,
     pub fps: u32,
+    /// libx264 CRF (0-51): lower is higher quality / larger file. Only used
+    /// for `OutputKind::Mp4`. 18 is visually near-lossless; 23 is x264's own
+    /// default.
+    pub mp4_crf: u8,
 }
 
 #[derive(Clone)]
@@ -170,7 +174,7 @@ impl MovieJob {
         let result = match self.settings.output_kind {
             OutputKind::PngSequence => Ok(()),
             OutputKind::Gif => encode_gif(&self.work_dir, self.total_frames, self.settings.fps, &self.output_path),
-            OutputKind::Mp4 => encode_mp4(&self.work_dir, self.settings.fps, &self.output_path),
+            OutputKind::Mp4 => encode_mp4(&self.work_dir, self.settings.fps, self.settings.mp4_crf, &self.output_path),
         };
         match result {
             Ok(()) => {
@@ -209,12 +213,16 @@ fn encode_gif(work_dir: &Path, frame_count: u32, fps: u32, output: &Path) -> Res
     Ok(())
 }
 
-fn encode_mp4(work_dir: &Path, fps: u32, output: &Path) -> Result<(), String> {
+fn encode_mp4(work_dir: &Path, fps: u32, crf: u8, output: &Path) -> Result<(), String> {
     let pattern = work_dir.join(format!("{FILENAME_PREFIX}_%05d.png"));
     let out = Command::new("ffmpeg")
         .args(["-y", "-framerate", &fps.to_string(), "-i"])
         .arg(&pattern)
-        .args(["-c:v", "libx264", "-pix_fmt", "yuv420p"])
+        // libx264 + yuv420p chroma subsampling requires both dimensions to be
+        // even; the canvas size is user-controlled and often isn't, so pad up
+        // to the next even size rather than failing on odd-height/width frames.
+        .args(["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2"])
+        .args(["-c:v", "libx264", "-preset", "slow", "-crf", &crf.min(51).to_string(), "-pix_fmt", "yuv420p"])
         .arg(output)
         .output()
         .map_err(|e| format!("failed to launch ffmpeg: {e}"))?;

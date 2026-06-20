@@ -784,6 +784,7 @@ impl App {
                         loop_back:       ui.movie_loop_back,
                         output_kind:     ui.movie_output_kind,
                         fps:             ui.movie_fps,
+                        mp4_crf:         ui.movie_mp4_crf,
                     };
                     let output_path = ui.movie_output_path.clone().unwrap_or_default();
                     match movie::MovieJob::new(keyframes, settings, output_path) {
