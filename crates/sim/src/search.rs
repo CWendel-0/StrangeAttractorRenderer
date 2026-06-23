@@ -22,6 +22,98 @@ use crate::poly_c::PolyC;
 use crate::poly_pow::PolyPow;
 use crate::poly_sin::PolySin;
 use crate::poly_sprott::PolySprott;
+use crate::genesio_tesi::GenesioTesi;
+use crate::arneodo::Arneodo;
+use crate::chen_celikovsky::ChenCelikovsky;
+use crate::shimizu_morioka::ShimizuMorioka;
+use crate::three_cells_cnn::ThreeCellsCnn;
+use crate::rucklidge::Rucklidge;
+use crate::rayleigh_benard::RayleighBenard;
+use crate::burke_shaw::BurkeShaw;
+use crate::sakarya::Sakarya;
+use crate::strizhak_kawczynski::StrizhakKawczynski;
+use crate::bouali::Bouali;
+use crate::halvorsen::Halvorsen;
+use crate::aizawa::Aizawa;
+use crate::dequan_li::DequanLi;
+use crate::hadley::Hadley;
+use crate::nose_hoover::NoseHoover;
+use crate::newton_leipnik::NewtonLeipnik;
+use crate::finance::Finance;
+use crate::chen_lee::ChenLee;
+use crate::sprott_linz_b::SprottLinzB;
+use crate::sprott_linz_c::SprottLinzC;
+use crate::sprott_linz_d::SprottLinzD;
+use crate::sprott_linz_e::SprottLinzE;
+use crate::sprott_linz_f::SprottLinzF;
+use crate::sprott_linz_g::SprottLinzG;
+use crate::sprott_linz_h::SprottLinzH;
+use crate::sprott_linz_i::SprottLinzI;
+use crate::sprott_linz_j::SprottLinzJ;
+use crate::sprott_linz_k::SprottLinzK;
+use crate::sprott_linz_l::SprottLinzL;
+use crate::sprott_linz_m::SprottLinzM;
+use crate::sprott_linz_n::SprottLinzN;
+use crate::sprott_linz_o::SprottLinzO;
+use crate::sprott_linz_p::SprottLinzP;
+use crate::sprott_linz_q::SprottLinzQ;
+use crate::sprott_linz_r::SprottLinzR;
+use crate::sprott_linz_s::SprottLinzS;
+use crate::act::Act;
+use crate::anishchenko_astakhov::AnishchenkoAstakhov;
+use crate::arnold::Arnold;
+use crate::bouali_iii::BoualiIii;
+use crate::burgers::Burgers;
+use crate::business_cycle_map::BusinessCycleMap;
+use crate::cathala::Cathala;
+use crate::chua_cubic::ChuaCubic;
+use crate::coullet::Coullet;
+use crate::dadras::Dadras;
+use crate::elhadj_sprott::ElhadjSprott;
+use crate::elhadj_sprott_a::ElhadjSprottA;
+use crate::elhadj_sprott_c_map::ElhadjSprottCMap;
+use crate::four_wing::FourWing;
+use crate::four_wing2::FourWing2;
+use crate::four_wing3::FourWing3;
+use crate::gingerbread::Gingerbread;
+use crate::gumowski_mira::GumowskiMira;
+use crate::hca::Hca;
+use crate::heagy_hammel::HeagyHammel;
+use crate::hopalong::Hopalong;
+use crate::ikeda::Ikeda;
+use crate::ikeda1::Ikeda1;
+use crate::liu_chen::LiuChen;
+use crate::lorenz_mod1::LorenzMod1;
+use crate::lorenz_mod2::LorenzMod2;
+use crate::lue_chen::LueChen;
+use crate::mira::Mira;
+use crate::modified_lozi::ModifiedLozi;
+use crate::multi_chua_ii::MultiChuaII;
+use crate::multifold_henon::MultifoldHenon;
+use crate::popcorn::Popcorn;
+use crate::popcorn2::Popcorn2;
+use crate::qi_3d::Qi3D;
+use crate::qi_chen::QiChen;
+use crate::robinson::Robinson;
+use crate::serpentine::Serpentine;
+use crate::strelkova_anishchenko::StrelkovaAnishchenko;
+use crate::tsucs_1::Tsucs1;
+use crate::tsucs_2::Tsucs2;
+use crate::wang_sun::WangSun;
+use crate::de_jong::DeJong;
+use crate::mac_millan::MacMillan;
+use crate::marotto_lorenz::MarottoLorenz;
+use crate::maynard_smith::MaynardSmith;
+use crate::nishikawa_kaneko::NishikawaKaneko;
+use crate::q_henon2::QHenon2;
+use crate::rulkov_map::RulkovMap;
+use crate::sine_delay::SineDelay;
+use crate::sine_sine_map::SineSineMap;
+use crate::svensson::Svensson;
+use crate::tinkerbell::Tinkerbell;
+use crate::yang_cao::YangCao;
+use crate::zhou::Zhou;
+use crate::zhou_chen::ZhouChen;
 
 pub struct SearchResult {
     pub attractor_type: AttractorType,
@@ -199,6 +291,98 @@ fn test_params(t: AttractorType, params: &[f32], stop: &AtomicBool) -> Option<(V
         AttractorType::PolyPow     => probe!(PolyPow),
         AttractorType::PolySin     => probe!(PolySin),
         AttractorType::PolySprott  => probe!(PolySprott),
+        AttractorType::GenesioTesi => probe!(GenesioTesi),
+        AttractorType::Arneodo     => probe!(Arneodo),
+        AttractorType::ChenCelikovsky     => probe!(ChenCelikovsky),
+        AttractorType::ShimizuMorioka     => probe!(ShimizuMorioka),
+        AttractorType::ThreeCellsCnn      => probe!(ThreeCellsCnn),
+        AttractorType::Rucklidge          => probe!(Rucklidge),
+        AttractorType::RayleighBenard     => probe!(RayleighBenard),
+        AttractorType::BurkeShaw          => probe!(BurkeShaw),
+        AttractorType::Sakarya            => probe!(Sakarya),
+        AttractorType::StrizhakKawczynski => probe!(StrizhakKawczynski),
+        AttractorType::Bouali             => probe!(Bouali),
+        AttractorType::Halvorsen          => probe!(Halvorsen),
+        AttractorType::Aizawa             => probe!(Aizawa),
+        AttractorType::DequanLi           => probe!(DequanLi),
+        AttractorType::Hadley             => probe!(Hadley),
+        AttractorType::NoseHoover         => probe!(NoseHoover),
+        AttractorType::NewtonLeipnik      => probe!(NewtonLeipnik),
+        AttractorType::Finance            => probe!(Finance),
+        AttractorType::ChenLee            => probe!(ChenLee),
+        AttractorType::SprottLinzB => probe!(SprottLinzB),
+        AttractorType::SprottLinzC => probe!(SprottLinzC),
+        AttractorType::SprottLinzD => probe!(SprottLinzD),
+        AttractorType::SprottLinzE => probe!(SprottLinzE),
+        AttractorType::SprottLinzF => probe!(SprottLinzF),
+        AttractorType::SprottLinzG => probe!(SprottLinzG),
+        AttractorType::SprottLinzH => probe!(SprottLinzH),
+        AttractorType::SprottLinzI => probe!(SprottLinzI),
+        AttractorType::SprottLinzJ => probe!(SprottLinzJ),
+        AttractorType::SprottLinzK => probe!(SprottLinzK),
+        AttractorType::SprottLinzL => probe!(SprottLinzL),
+        AttractorType::SprottLinzM => probe!(SprottLinzM),
+        AttractorType::SprottLinzN => probe!(SprottLinzN),
+        AttractorType::SprottLinzO => probe!(SprottLinzO),
+        AttractorType::SprottLinzP => probe!(SprottLinzP),
+        AttractorType::SprottLinzQ => probe!(SprottLinzQ),
+        AttractorType::SprottLinzR => probe!(SprottLinzR),
+        AttractorType::SprottLinzS => probe!(SprottLinzS),
+        AttractorType::Act => probe!(Act),
+        AttractorType::AnishchenkoAstakhov => probe!(AnishchenkoAstakhov),
+        AttractorType::Arnold => probe!(Arnold),
+        AttractorType::BoualiIii => probe!(BoualiIii),
+        AttractorType::Burgers => probe!(Burgers),
+        AttractorType::BusinessCycleMap => probe!(BusinessCycleMap),
+        AttractorType::Cathala => probe!(Cathala),
+        AttractorType::ChuaCubic => probe!(ChuaCubic),
+        AttractorType::Coullet => probe!(Coullet),
+        AttractorType::Dadras => probe!(Dadras),
+        AttractorType::ElhadjSprott => probe!(ElhadjSprott),
+        AttractorType::ElhadjSprottA => probe!(ElhadjSprottA),
+        AttractorType::ElhadjSprottCMap => probe!(ElhadjSprottCMap),
+        AttractorType::FourWing => probe!(FourWing),
+        AttractorType::FourWing2 => probe!(FourWing2),
+        AttractorType::FourWing3 => probe!(FourWing3),
+        AttractorType::Gingerbread => probe!(Gingerbread),
+        AttractorType::GumowskiMira => probe!(GumowskiMira),
+        AttractorType::Hca => probe!(Hca),
+        AttractorType::HeagyHammel => probe!(HeagyHammel),
+        AttractorType::Hopalong => probe!(Hopalong),
+        AttractorType::Ikeda => probe!(Ikeda),
+        AttractorType::Ikeda1 => probe!(Ikeda1),
+        AttractorType::LiuChen => probe!(LiuChen),
+        AttractorType::LorenzMod1 => probe!(LorenzMod1),
+        AttractorType::LorenzMod2 => probe!(LorenzMod2),
+        AttractorType::LueChen => probe!(LueChen),
+        AttractorType::Mira => probe!(Mira),
+        AttractorType::ModifiedLozi => probe!(ModifiedLozi),
+        AttractorType::MultiChuaII => probe!(MultiChuaII),
+        AttractorType::MultifoldHenon => probe!(MultifoldHenon),
+        AttractorType::Popcorn => probe!(Popcorn),
+        AttractorType::Popcorn2 => probe!(Popcorn2),
+        AttractorType::Qi3D => probe!(Qi3D),
+        AttractorType::QiChen => probe!(QiChen),
+        AttractorType::Robinson => probe!(Robinson),
+        AttractorType::Serpentine => probe!(Serpentine),
+        AttractorType::StrelkovaAnishchenko => probe!(StrelkovaAnishchenko),
+        AttractorType::Tsucs1 => probe!(Tsucs1),
+        AttractorType::Tsucs2 => probe!(Tsucs2),
+        AttractorType::WangSun => probe!(WangSun),
+        AttractorType::DeJong => probe!(DeJong),
+        AttractorType::MacMillan => probe!(MacMillan),
+        AttractorType::MarottoLorenz => probe!(MarottoLorenz),
+        AttractorType::MaynardSmith => probe!(MaynardSmith),
+        AttractorType::NishikawaKaneko => probe!(NishikawaKaneko),
+        AttractorType::QHenon2 => probe!(QHenon2),
+        AttractorType::RulkovMap => probe!(RulkovMap),
+        AttractorType::SineDelay => probe!(SineDelay),
+        AttractorType::SineSineMap => probe!(SineSineMap),
+        AttractorType::Svensson => probe!(Svensson),
+        AttractorType::Tinkerbell => probe!(Tinkerbell),
+        AttractorType::YangCao => probe!(YangCao),
+        AttractorType::Zhou => probe!(Zhou),
+        AttractorType::ZhouChen => probe!(ZhouChen),
     }
 }
 
@@ -231,13 +415,26 @@ fn run_test<A: Attractor>(
     const EARLY_CHK:       usize = 500;
     const LY_EARLY_THRESH: f32   = -0.1;
     const LY_EPS:          f32   = 1e-4;
-    // Map thresholds
+    // Map thresholds.  LY_MAX was originally 0.3, calibrated against a handful of
+    // weakly-chaotic Hénon/Clifford-style maps; the much wider variety of map
+    // families ported since then includes several legitimately good-looking
+    // attractors (e.g. Arnold's cat map, Elhadj-Sprott A) whose true λ₁ is far
+    // higher (measured 0.3–8.5+) without looking like unstructured noise — the
+    // dimension/recurrence/speed-CV/uniqueness filters below still gate quality.
     const LY_MIN:          f32   = 0.03;
-    const LY_MAX:          f32   = 0.3;
-    const DIM_MIN:         f32   = 1.5;
+    const LY_MAX:          f32   = 10.0;
+    // DIM_MIN was 1.5; quasi-periodically-forced maps (a "+const mod 1" phase
+    // coordinate riding alongside the chaotic one, e.g. Q-Henon 2) measure a
+    // legitimately lower Kaplan-Yorke dimension since part of the state is a
+    // pure rotation, not chaotic — 1.05 still excludes near-1D limit cycles.
+    const DIM_MIN:         f32   = 1.05;
     const DIM_MAX:         f32   = 10.0;
-    // Flow thresholds (D_KY = 2 + λ₁/|λ₃|; limit cycles give exactly 2.0)
-    const FLOW_DIM_MIN:    f32   = 2.05;
+    // Flow thresholds (D_KY = 2 + λ₁/|λ₃|; limit cycles give exactly 2.0).
+    // FLOW_DIM_MIN was 2.05; a few legitimately-chaotic-but-weak flows (e.g.
+    // ACT) sit only marginally above 2.0 (measured ~2.02-2.04) — still a
+    // meaningful margin over an exact limit cycle, just not a strongly mixing
+    // one.
+    const FLOW_DIM_MIN:    f32   = 2.02;
     const FLOW_DIM_MAX:    f32   = 10.0;
     const BOUND:           f32   = 1e6;
     const CHECK_INT:       usize = 500;
@@ -281,40 +478,62 @@ for _ in 0..10_000 {
             Some(pt) => pt,
         };
         if !pt_m.pos.is_finite() || pt_m.pos.length() > BOUND { return None; }
+        // Lyapunov bookkeeping always operates in the attractor's true phase-space
+        // coordinates (`pos()`), not the rendered point (`step()`'s `Point.pos`).
+        // These coincide for almost every attractor, but a few (e.g. Yang-Cao)
+        // render a derived projection of the internal state; using the rendered
+        // point here would feed mismatched-scale coordinates into `set_pos()`.
+        let main_pos = main.pos();
 
-        if let Some(pt_s1) = shadow1.step() {
-            let sep1 = pt_s1.pos - pt_m.pos;
+        if shadow1.step().is_some() {
+            let sep1 = shadow1.pos() - main_pos;
             let len1 = sep1.length();
             if len1 > 0.0 && len1.is_finite() {
                 d1_hat = sep1 / len1;
-                shadow1.set_pos(pt_m.pos + d1_hat * LY_EPS);
+                shadow1.set_pos(main_pos + d1_hat * LY_EPS);
+            } else {
+                // Collapsed onto main (e.g. landed on a critical point of the
+                // map where separation underflows below f32 precision) —
+                // re-seed so it doesn't stay locked to main forever.
+                shadow1.set_pos(main_pos + d1_hat * LY_EPS);
             }
+        } else {
+            // Shadow escaped (e.g. a near-boundary excursion in a map whose
+            // formula is only well-behaved inside a bounded domain) and is
+            // permanently stuck returning None from its last finite state.
+            // Re-seed it next to main along the last known direction instead
+            // of leaving it dead for the rest of the run.
+            shadow1.set_pos(main_pos + d1_hat * LY_EPS);
         }
-        if let Some(pt_s2) = shadow2.step() {
-            let sep2      = pt_s2.pos - pt_m.pos;
+        if shadow2.step().is_some() {
+            let sep2      = shadow2.pos() - main_pos;
             let sep2_orth = sep2 - sep2.dot(d1_hat) * d1_hat;
             let len2      = sep2_orth.length();
             if len2 > 1e-30 && len2.is_finite() {
                 d2_hat = sep2_orth / len2;
-                shadow2.set_pos(pt_m.pos + d2_hat * LY_EPS);
+                shadow2.set_pos(main_pos + d2_hat * LY_EPS);
             } else if len2.is_finite() {
                 let perp = if d1_hat.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
                 d2_hat = (perp - perp.dot(d1_hat) * d1_hat).normalize();
-                shadow2.set_pos(pt_m.pos + d2_hat * LY_EPS);
+                shadow2.set_pos(main_pos + d2_hat * LY_EPS);
             }
+        } else {
+            shadow2.set_pos(main_pos + d2_hat * LY_EPS);
         }
         if is_flow {
-            if let Some(pt_s3) = shadow3.step() {
-                let sep3      = pt_s3.pos - pt_m.pos;
+            if shadow3.step().is_some() {
+                let sep3      = shadow3.pos() - main_pos;
                 let sep3_orth = sep3
                     - sep3.dot(d1_hat) * d1_hat
                     - sep3.dot(d2_hat) * d2_hat;
                 let len3 = sep3_orth.length();
                 if len3 > 1e-30 && len3.is_finite() {
-                    shadow3.set_pos(pt_m.pos + (sep3_orth / len3) * LY_EPS);
+                    shadow3.set_pos(main_pos + (sep3_orth / len3) * LY_EPS);
                 } else if len3.is_finite() {
-                    shadow3.set_pos(pt_m.pos + d1_hat.cross(d2_hat).normalize() * LY_EPS);
+                    shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize() * LY_EPS);
                 }
+            } else {
+                shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize() * LY_EPS);
             }
         }
     }
@@ -340,6 +559,7 @@ for _ in 0..10_000 {
     // Recurrence reference: a period-P orbit returns to this position every P steps.
     // Chaotic orbits never return within a small fraction of the bounding box.
     let mut recurrence_ref = Vec3::ZERO;
+    let mut recurrence_streak = 0u32;
     fixed_streak = 0;
     prev = main.pos();
 
@@ -371,48 +591,79 @@ for _ in 0..10_000 {
         // Periodic-orbit recurrence check: a period-P orbit returns to the
         // reference position every P steps with near-zero distance.  Chaotic
         // orbits never return within 0.1 % of the bounding-box diagonal.
+        // Require two consecutive 100-step checkpoints to hit before rejecting:
+        // maps with a deliberately periodic phase coordinate (e.g. a "+const
+        // mod 1" rotation driving otherwise-chaotic dynamics, as in Heagy-Hammel
+        // or Nishikawa-Kaneko) can land close to the reference once by sheer
+        // coincidence in the chaotic coordinate while the rotating coordinate
+        // cycles back — a true period-P orbit hits on every checkpoint, not
+        // just one.
         if i >= 300 && i % 100 == 0 {
             let bb_diag = (bb_max - bb_min).length().max(0.2);
             if (pt_m.pos - recurrence_ref).length() < 0.001 * bb_diag {
-                return None;
+                recurrence_streak += 1;
+                if recurrence_streak >= 2 {
+                    return None;
+                }
+            } else {
+                recurrence_streak = 0;
             }
         }
         prev = pt_m.pos;
+        // See the comment in the shadow-warmup loop above: Lyapunov bookkeeping
+        // uses `pos()` (true phase-space state), not the rendered `step()` point.
+        let main_pos = main.pos();
 
         // --- shadow1 → λ₁ ---
-        if let Some(pt_s1) = shadow1.step() {
-            let sep1 = pt_s1.pos - pt_m.pos;
+        if shadow1.step().is_some() {
+            let sep1 = shadow1.pos() - main_pos;
             let len1 = sep1.length();
             if len1 > 0.0 && len1.is_finite() {
                 ly1_sum   += (len1 / LY_EPS).ln() as f64;
                 ly1_count += 1;
                 d1_hat     = sep1 / len1;
-                shadow1.set_pos(pt_m.pos + d1_hat * LY_EPS);
+                shadow1.set_pos(main_pos + d1_hat * LY_EPS);
+            } else {
+                // Separation underflowed to exactly 0 (or went non-finite)
+                // without the shadow's own step failing — typically because
+                // the orbit passed through a critical point of the map (e.g.
+                // a 1D logistic-style fold, where derivative ≈ 0 collapses
+                // an f32-scale separation below precision in one step).
+                // Once collapsed, a deterministic map keeps shadow1 locked
+                // exactly onto main forever; re-seed it next to main so it
+                // can resume tracking instead of permanently zeroing ly1.
+                shadow1.set_pos(main_pos + d1_hat * LY_EPS);
             }
+        } else {
+            // See the warmup loop: re-seed an escaped/stuck shadow rather
+            // than letting it stay dead (and ly1_count stuck at 0) forever.
+            shadow1.set_pos(main_pos + d1_hat * LY_EPS);
         }
 
         // --- shadow2 → λ₂ (Gram-Schmidt ⊥ shadow1) ---
-        if let Some(pt_s2) = shadow2.step() {
-            let sep2      = pt_s2.pos - pt_m.pos;
+        if shadow2.step().is_some() {
+            let sep2      = shadow2.pos() - main_pos;
             let sep2_orth = sep2 - sep2.dot(d1_hat) * d1_hat;
             let len2      = sep2_orth.length();
             if len2 > 1e-30 && len2.is_finite() {
                 ly2_sum   += (len2 / LY_EPS).ln() as f64;
                 ly2_count += 1;
                 d2_hat     = sep2_orth / len2;
-                shadow2.set_pos(pt_m.pos + d2_hat * LY_EPS);
+                shadow2.set_pos(main_pos + d2_hat * LY_EPS);
             } else if len2.is_finite() {
                 let perp = if d1_hat.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
                 d2_hat = (perp - perp.dot(d1_hat) * d1_hat).normalize();
-                shadow2.set_pos(pt_m.pos + d2_hat * LY_EPS);
+                shadow2.set_pos(main_pos + d2_hat * LY_EPS);
             }
+        } else {
+            shadow2.set_pos(main_pos + d2_hat * LY_EPS);
         }
 
         // --- shadow3 → λ₃ (Gram-Schmidt ⊥ shadow1 and shadow2) ---
         // Only needed for flow attractors; skip for maps to save computation.
         if is_flow {
-            if let Some(pt_s3) = shadow3.step() {
-                let sep3      = pt_s3.pos - pt_m.pos;
+            if shadow3.step().is_some() {
+                let sep3      = shadow3.pos() - main_pos;
                 let sep3_orth = sep3
                     - sep3.dot(d1_hat) * d1_hat
                     - sep3.dot(d2_hat) * d2_hat;
@@ -421,11 +672,13 @@ for _ in 0..10_000 {
                     ly3_sum   += (len3 / LY_EPS).ln() as f64;
                     ly3_count += 1;
                     let d3_hat = sep3_orth / len3;
-                    shadow3.set_pos(pt_m.pos + d3_hat * LY_EPS);
+                    shadow3.set_pos(main_pos + d3_hat * LY_EPS);
                 } else if len3.is_finite() {
                     let d3_new = d1_hat.cross(d2_hat).normalize();
-                    shadow3.set_pos(pt_m.pos + d3_new * LY_EPS);
+                    shadow3.set_pos(main_pos + d3_new * LY_EPS);
                 }
+            } else {
+                shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize() * LY_EPS);
             }
         }
 
@@ -468,12 +721,19 @@ for _ in 0..10_000 {
         if ly3 >= 0.0 { return None; } // not dissipative
         2.0_f32 + ly1 / (-ly3)
     } else {
-        // Discrete map: D_KY = 1 + λ₁/|λ₂|.
+        // Discrete map: D_KY = 1 + λ₁/|λ₂|, valid when λ₂ < 0 (a genuinely
+        // dissipative/contracting direction, giving a thin fractal curve).
+        // Some legitimately good-looking maps (e.g. Elhadj-Sprott A, Popcorn,
+        // Serpentine) expand in BOTH directions on average — chaotic but
+        // "area-filling" rather than a thin fractal — where λ₂ ≥ 0 makes the
+        // Kaplan-Yorke formula inapplicable. Rather than reject outright,
+        // treat that case as dimension-saturated (D_KY = DIM_MAX) and let the
+        // other quality gates (recurrence/uniqueness/speed-CV/extent below)
+        // decide whether it's actually a good attractor.
         if ly1 < LY_MIN || ly1 > LY_MAX { return None; }
         if ly2_count == 0 { return None; }
         let ly2 = (ly2_sum / ly2_count as f64) as f32;
-        if ly2 >= 0.0 { return None; }
-        1.0_f32 + ly1 / (-ly2)
+        if ly2 >= 0.0 { DIM_MAX } else { 1.0_f32 + ly1 / (-ly2) }
     };
 
     let (dim_min, dim_max) = if is_flow {
@@ -573,6 +833,98 @@ fn metrics_dispatch(
         AttractorType::PolyPow     => probe!(PolyPow),
         AttractorType::PolySin     => probe!(PolySin),
         AttractorType::PolySprott  => probe!(PolySprott),
+        AttractorType::GenesioTesi => probe!(GenesioTesi),
+        AttractorType::Arneodo     => probe!(Arneodo),
+        AttractorType::ChenCelikovsky     => probe!(ChenCelikovsky),
+        AttractorType::ShimizuMorioka     => probe!(ShimizuMorioka),
+        AttractorType::ThreeCellsCnn      => probe!(ThreeCellsCnn),
+        AttractorType::Rucklidge          => probe!(Rucklidge),
+        AttractorType::RayleighBenard     => probe!(RayleighBenard),
+        AttractorType::BurkeShaw          => probe!(BurkeShaw),
+        AttractorType::Sakarya            => probe!(Sakarya),
+        AttractorType::StrizhakKawczynski => probe!(StrizhakKawczynski),
+        AttractorType::Bouali             => probe!(Bouali),
+        AttractorType::Halvorsen          => probe!(Halvorsen),
+        AttractorType::Aizawa             => probe!(Aizawa),
+        AttractorType::DequanLi           => probe!(DequanLi),
+        AttractorType::Hadley             => probe!(Hadley),
+        AttractorType::NoseHoover         => probe!(NoseHoover),
+        AttractorType::NewtonLeipnik      => probe!(NewtonLeipnik),
+        AttractorType::Finance            => probe!(Finance),
+        AttractorType::ChenLee            => probe!(ChenLee),
+        AttractorType::SprottLinzB => probe!(SprottLinzB),
+        AttractorType::SprottLinzC => probe!(SprottLinzC),
+        AttractorType::SprottLinzD => probe!(SprottLinzD),
+        AttractorType::SprottLinzE => probe!(SprottLinzE),
+        AttractorType::SprottLinzF => probe!(SprottLinzF),
+        AttractorType::SprottLinzG => probe!(SprottLinzG),
+        AttractorType::SprottLinzH => probe!(SprottLinzH),
+        AttractorType::SprottLinzI => probe!(SprottLinzI),
+        AttractorType::SprottLinzJ => probe!(SprottLinzJ),
+        AttractorType::SprottLinzK => probe!(SprottLinzK),
+        AttractorType::SprottLinzL => probe!(SprottLinzL),
+        AttractorType::SprottLinzM => probe!(SprottLinzM),
+        AttractorType::SprottLinzN => probe!(SprottLinzN),
+        AttractorType::SprottLinzO => probe!(SprottLinzO),
+        AttractorType::SprottLinzP => probe!(SprottLinzP),
+        AttractorType::SprottLinzQ => probe!(SprottLinzQ),
+        AttractorType::SprottLinzR => probe!(SprottLinzR),
+        AttractorType::SprottLinzS => probe!(SprottLinzS),
+        AttractorType::Act => probe!(Act),
+        AttractorType::AnishchenkoAstakhov => probe!(AnishchenkoAstakhov),
+        AttractorType::Arnold => probe!(Arnold),
+        AttractorType::BoualiIii => probe!(BoualiIii),
+        AttractorType::Burgers => probe!(Burgers),
+        AttractorType::BusinessCycleMap => probe!(BusinessCycleMap),
+        AttractorType::Cathala => probe!(Cathala),
+        AttractorType::ChuaCubic => probe!(ChuaCubic),
+        AttractorType::Coullet => probe!(Coullet),
+        AttractorType::Dadras => probe!(Dadras),
+        AttractorType::ElhadjSprott => probe!(ElhadjSprott),
+        AttractorType::ElhadjSprottA => probe!(ElhadjSprottA),
+        AttractorType::ElhadjSprottCMap => probe!(ElhadjSprottCMap),
+        AttractorType::FourWing => probe!(FourWing),
+        AttractorType::FourWing2 => probe!(FourWing2),
+        AttractorType::FourWing3 => probe!(FourWing3),
+        AttractorType::Gingerbread => probe!(Gingerbread),
+        AttractorType::GumowskiMira => probe!(GumowskiMira),
+        AttractorType::Hca => probe!(Hca),
+        AttractorType::HeagyHammel => probe!(HeagyHammel),
+        AttractorType::Hopalong => probe!(Hopalong),
+        AttractorType::Ikeda => probe!(Ikeda),
+        AttractorType::Ikeda1 => probe!(Ikeda1),
+        AttractorType::LiuChen => probe!(LiuChen),
+        AttractorType::LorenzMod1 => probe!(LorenzMod1),
+        AttractorType::LorenzMod2 => probe!(LorenzMod2),
+        AttractorType::LueChen => probe!(LueChen),
+        AttractorType::Mira => probe!(Mira),
+        AttractorType::ModifiedLozi => probe!(ModifiedLozi),
+        AttractorType::MultiChuaII => probe!(MultiChuaII),
+        AttractorType::MultifoldHenon => probe!(MultifoldHenon),
+        AttractorType::Popcorn => probe!(Popcorn),
+        AttractorType::Popcorn2 => probe!(Popcorn2),
+        AttractorType::Qi3D => probe!(Qi3D),
+        AttractorType::QiChen => probe!(QiChen),
+        AttractorType::Robinson => probe!(Robinson),
+        AttractorType::Serpentine => probe!(Serpentine),
+        AttractorType::StrelkovaAnishchenko => probe!(StrelkovaAnishchenko),
+        AttractorType::Tsucs1 => probe!(Tsucs1),
+        AttractorType::Tsucs2 => probe!(Tsucs2),
+        AttractorType::WangSun => probe!(WangSun),
+        AttractorType::DeJong => probe!(DeJong),
+        AttractorType::MacMillan => probe!(MacMillan),
+        AttractorType::MarottoLorenz => probe!(MarottoLorenz),
+        AttractorType::MaynardSmith => probe!(MaynardSmith),
+        AttractorType::NishikawaKaneko => probe!(NishikawaKaneko),
+        AttractorType::QHenon2 => probe!(QHenon2),
+        AttractorType::RulkovMap => probe!(RulkovMap),
+        AttractorType::SineDelay => probe!(SineDelay),
+        AttractorType::SineSineMap => probe!(SineSineMap),
+        AttractorType::Svensson => probe!(Svensson),
+        AttractorType::Tinkerbell => probe!(Tinkerbell),
+        AttractorType::YangCao => probe!(YangCao),
+        AttractorType::Zhou => probe!(Zhou),
+        AttractorType::ZhouChen => probe!(ZhouChen),
     }
 }
 
@@ -618,22 +970,31 @@ fn run_metrics<A: Attractor>(
     for _ in 0..SHAD_WARMUP {
         let pt_m = match main.step() { None => return None, Some(p) => p };
         if !pt_m.pos.is_finite() || pt_m.pos.length() > BOUND { return None; }
-        if let Some(s) = shadow1.step() {
-            let sep = s.pos - pt_m.pos; let len = sep.length();
-            if len > 0.0 && len.is_finite() { d1_hat = sep/len; shadow1.set_pos(pt_m.pos + d1_hat*LY_EPS); }
+        // See run_test: Lyapunov bookkeeping uses `pos()`, not the rendered point.
+        let main_pos = main.pos();
+        if shadow1.step().is_some() {
+            let sep = shadow1.pos() - main_pos; let len = sep.length();
+            if len > 0.0 && len.is_finite() { d1_hat = sep/len; shadow1.set_pos(main_pos + d1_hat*LY_EPS); }
+            else { shadow1.set_pos(main_pos + d1_hat*LY_EPS); }
+        } else {
+            shadow1.set_pos(main_pos + d1_hat*LY_EPS);
         }
-        if let Some(s) = shadow2.step() {
-            let sep = s.pos - pt_m.pos;
+        if shadow2.step().is_some() {
+            let sep = shadow2.pos() - main_pos;
             let orth = sep - sep.dot(d1_hat)*d1_hat; let len = orth.length();
-            if len > 1e-30 && len.is_finite() { d2_hat = orth/len; shadow2.set_pos(pt_m.pos + d2_hat*LY_EPS); }
+            if len > 1e-30 && len.is_finite() { d2_hat = orth/len; shadow2.set_pos(main_pos + d2_hat*LY_EPS); }
+        } else {
+            shadow2.set_pos(main_pos + d2_hat*LY_EPS);
         }
         if is_flow {
-            if let Some(s) = shadow3.step() {
-                let sep = s.pos - pt_m.pos;
+            if shadow3.step().is_some() {
+                let sep = shadow3.pos() - main_pos;
                 let orth = sep - sep.dot(d1_hat)*d1_hat - sep.dot(d2_hat)*d2_hat;
                 let len = orth.length();
-                if len > 1e-30 && len.is_finite() { shadow3.set_pos(pt_m.pos + (orth/len)*LY_EPS); }
-                else if len.is_finite() { shadow3.set_pos(pt_m.pos + d1_hat.cross(d2_hat).normalize()*LY_EPS); }
+                if len > 1e-30 && len.is_finite() { shadow3.set_pos(main_pos + (orth/len)*LY_EPS); }
+                else if len.is_finite() { shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize()*LY_EPS); }
+            } else {
+                shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize()*LY_EPS);
             }
         }
     }
@@ -651,37 +1012,46 @@ fn run_metrics<A: Attractor>(
         if d < 1e-7 { fixed_streak += 1; if fixed_streak > 5 { return None; } }
         else { fixed_streak = 0; }
         prev = pt_m.pos;
+        let main_pos = main.pos();
 
-        if let Some(s) = shadow1.step() {
-            let sep = s.pos - pt_m.pos; let len = sep.length();
+        if shadow1.step().is_some() {
+            let sep = shadow1.pos() - main_pos; let len = sep.length();
             if len > 0.0 && len.is_finite() {
                 ly1_sum += (len/LY_EPS).ln() as f64; ly1_n += 1;
-                d1_hat = sep/len; shadow1.set_pos(pt_m.pos + d1_hat*LY_EPS);
+                d1_hat = sep/len; shadow1.set_pos(main_pos + d1_hat*LY_EPS);
+            } else {
+                shadow1.set_pos(main_pos + d1_hat*LY_EPS);
             }
+        } else {
+            shadow1.set_pos(main_pos + d1_hat*LY_EPS);
         }
-        if let Some(s) = shadow2.step() {
-            let sep = s.pos - pt_m.pos;
+        if shadow2.step().is_some() {
+            let sep = shadow2.pos() - main_pos;
             let orth = sep - sep.dot(d1_hat)*d1_hat; let len = orth.length();
             if len > 1e-30 && len.is_finite() {
                 ly2_sum += (len/LY_EPS).ln() as f64; ly2_n += 1;
-                d2_hat = orth/len; shadow2.set_pos(pt_m.pos + d2_hat*LY_EPS);
+                d2_hat = orth/len; shadow2.set_pos(main_pos + d2_hat*LY_EPS);
             } else if len.is_finite() {
                 let perp = if d1_hat.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
                 d2_hat = (perp - perp.dot(d1_hat)*d1_hat).normalize();
-                shadow2.set_pos(pt_m.pos + d2_hat*LY_EPS);
+                shadow2.set_pos(main_pos + d2_hat*LY_EPS);
             }
+        } else {
+            shadow2.set_pos(main_pos + d2_hat*LY_EPS);
         }
         if is_flow {
-            if let Some(s) = shadow3.step() {
-                let sep = s.pos - pt_m.pos;
+            if shadow3.step().is_some() {
+                let sep = shadow3.pos() - main_pos;
                 let orth = sep - sep.dot(d1_hat)*d1_hat - sep.dot(d2_hat)*d2_hat;
                 let len = orth.length();
                 if len > 1e-30 && len.is_finite() {
                     ly3_sum += (len/LY_EPS).ln() as f64; ly3_n += 1;
-                    shadow3.set_pos(pt_m.pos + (orth/len)*LY_EPS);
+                    shadow3.set_pos(main_pos + (orth/len)*LY_EPS);
                 } else if len.is_finite() {
-                    shadow3.set_pos(pt_m.pos + d1_hat.cross(d2_hat).normalize()*LY_EPS);
+                    shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize()*LY_EPS);
                 }
+            } else {
+                shadow3.set_pos(main_pos + d1_hat.cross(d2_hat).normalize()*LY_EPS);
             }
         }
     }
@@ -702,4 +1072,43 @@ fn run_metrics<A: Attractor>(
     };
 
     Some((ly1, d_ky))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Default parameters for these attractor types should pass the chaoticity
+    /// filter in `test_params` — i.e. clicking "Randomize" (or just switching to
+    /// the type) should reliably be able to find/recognize a good-looking result.
+    /// Several of these were previously rejected outright by filter constants
+    /// calibrated against a narrower, earlier set of attractor families; see the
+    /// comments on LY_MAX/DIM_MIN/FLOW_DIM_MIN and the λ₂≥0 "area-filling chaos"
+    /// branch above. Heagy-Hammel and Nishikawa-Kaneko are deliberately excluded:
+    /// their shipped defaults sit right at the edge of chaos (λ₁ ≈ 0) and remain
+    /// flaky even after the shadow-tracking fixes here.
+    #[test]
+    fn default_params_pass_chaoticity_filter() {
+        const SHOULD_PASS: &[AttractorType] = &[
+            AttractorType::Arnold,
+            AttractorType::ElhadjSprottA,
+            AttractorType::Popcorn,
+            AttractorType::Serpentine,
+            AttractorType::QHenon2,
+            AttractorType::YangCao,
+            AttractorType::ThreeCellsCnn,
+            AttractorType::SprottLinzL,
+            AttractorType::Act,
+        ];
+        let stop = AtomicBool::new(false);
+        for &t in SHOULD_PASS {
+            let descs = t.descriptors();
+            let defaults: Vec<f32> = descs.iter().map(|d| d.default).collect();
+            assert!(
+                test_params(t, &defaults, &stop).is_some(),
+                "{:?}: default params should pass the chaoticity filter", t
+            );
+        }
+    }
 }

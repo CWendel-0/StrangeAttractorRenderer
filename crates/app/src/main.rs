@@ -1,4 +1,5 @@
 mod camera;
+mod colorset;
 mod gradient;
 mod movie;
 mod state;
@@ -245,7 +246,7 @@ impl ApplicationHandler for App {
         self.canvas_tex_id     = Some(canvas_tex_id);
         self.canvas_tex_id_raw = Some(canvas_tex_id_raw);
 
-        self.ui = Some(UiState::new(canvas_w, canvas_h));
+        self.ui = Some(UiState::new(canvas_w, canvas_h, colorset::load_custom_color_sets()));
 
         self.window     = Some(window);
         self.gpu        = Some(gpu);
@@ -798,6 +799,11 @@ impl App {
         if ui.movie_close_requested {
             self.movie_job = None;
             ui.movie_status_for_ui = None;
+        }
+
+        if ui.color_sets_dirty {
+            colorset::save_custom_color_sets(&ui.color_sets_custom);
+            ui.color_sets_dirty = false;
         }
     }
 }

@@ -298,6 +298,98 @@ impl Histogram {
             map.insert(AttractorType::PolyPow,     make_sim_pipeline(device, include_str!("../shaders/sim_poly_pow.wgsl"),     &sim_bind_layout, "sim_poly_pow"));
             map.insert(AttractorType::PolySin,     make_sim_pipeline(device, include_str!("../shaders/sim_poly_sin.wgsl"),     &sim_bind_layout, "sim_poly_sin"));
             map.insert(AttractorType::PolySprott,  make_sim_pipeline(device, include_str!("../shaders/sim_poly_sprott.wgsl"),  &sim_bind_layout, "sim_poly_sprott"));
+            map.insert(AttractorType::GenesioTesi, make_sim_pipeline(device, include_str!("../shaders/sim_genesio_tesi.wgsl"), &sim_bind_layout, "sim_genesio_tesi"));
+            map.insert(AttractorType::Arneodo,     make_sim_pipeline(device, include_str!("../shaders/sim_arneodo.wgsl"),     &sim_bind_layout, "sim_arneodo"));
+            map.insert(AttractorType::ChenCelikovsky, make_sim_pipeline(device, include_str!("../shaders/sim_chen_celikovsky.wgsl"), &sim_bind_layout, "sim_chen_celikovsky"));
+            map.insert(AttractorType::ShimizuMorioka, make_sim_pipeline(device, include_str!("../shaders/sim_shimizu_morioka.wgsl"), &sim_bind_layout, "sim_shimizu_morioka"));
+            map.insert(AttractorType::ThreeCellsCnn,  make_sim_pipeline(device, include_str!("../shaders/sim_three_cells_cnn.wgsl"),  &sim_bind_layout, "sim_three_cells_cnn"));
+            map.insert(AttractorType::Rucklidge,      make_sim_pipeline(device, include_str!("../shaders/sim_rucklidge.wgsl"),        &sim_bind_layout, "sim_rucklidge"));
+            map.insert(AttractorType::RayleighBenard, make_sim_pipeline(device, include_str!("../shaders/sim_rayleigh_benard.wgsl"),  &sim_bind_layout, "sim_rayleigh_benard"));
+            map.insert(AttractorType::BurkeShaw,      make_sim_pipeline(device, include_str!("../shaders/sim_burke_shaw.wgsl"),       &sim_bind_layout, "sim_burke_shaw"));
+            map.insert(AttractorType::Sakarya,        make_sim_pipeline(device, include_str!("../shaders/sim_sakarya.wgsl"),          &sim_bind_layout, "sim_sakarya"));
+            map.insert(AttractorType::StrizhakKawczynski, make_sim_pipeline(device, include_str!("../shaders/sim_strizhak_kawczynski.wgsl"), &sim_bind_layout, "sim_strizhak_kawczynski"));
+            map.insert(AttractorType::Bouali,         make_sim_pipeline(device, include_str!("../shaders/sim_bouali.wgsl"),           &sim_bind_layout, "sim_bouali"));
+            map.insert(AttractorType::Halvorsen,      make_sim_pipeline(device, include_str!("../shaders/sim_halvorsen.wgsl"),        &sim_bind_layout, "sim_halvorsen"));
+            map.insert(AttractorType::Aizawa,         make_sim_pipeline(device, include_str!("../shaders/sim_aizawa.wgsl"),           &sim_bind_layout, "sim_aizawa"));
+            map.insert(AttractorType::DequanLi,       make_sim_pipeline(device, include_str!("../shaders/sim_dequan_li.wgsl"),        &sim_bind_layout, "sim_dequan_li"));
+            map.insert(AttractorType::Hadley,         make_sim_pipeline(device, include_str!("../shaders/sim_hadley.wgsl"),           &sim_bind_layout, "sim_hadley"));
+            map.insert(AttractorType::NoseHoover,     make_sim_pipeline(device, include_str!("../shaders/sim_nose_hoover.wgsl"),      &sim_bind_layout, "sim_nose_hoover"));
+            map.insert(AttractorType::NewtonLeipnik,  make_sim_pipeline(device, include_str!("../shaders/sim_newton_leipnik.wgsl"),   &sim_bind_layout, "sim_newton_leipnik"));
+            map.insert(AttractorType::Finance,        make_sim_pipeline(device, include_str!("../shaders/sim_finance.wgsl"),          &sim_bind_layout, "sim_finance"));
+            map.insert(AttractorType::ChenLee,        make_sim_pipeline(device, include_str!("../shaders/sim_chen_lee.wgsl"),         &sim_bind_layout, "sim_chen_lee"));
+            map.insert(AttractorType::SprottLinzB, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_b.wgsl"), &sim_bind_layout, "sim_sprott_linz_b"));
+            map.insert(AttractorType::SprottLinzC, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_c.wgsl"), &sim_bind_layout, "sim_sprott_linz_c"));
+            map.insert(AttractorType::SprottLinzD, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_d.wgsl"), &sim_bind_layout, "sim_sprott_linz_d"));
+            map.insert(AttractorType::SprottLinzE, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_e.wgsl"), &sim_bind_layout, "sim_sprott_linz_e"));
+            map.insert(AttractorType::SprottLinzF, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_f.wgsl"), &sim_bind_layout, "sim_sprott_linz_f"));
+            map.insert(AttractorType::SprottLinzG, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_g.wgsl"), &sim_bind_layout, "sim_sprott_linz_g"));
+            map.insert(AttractorType::SprottLinzH, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_h.wgsl"), &sim_bind_layout, "sim_sprott_linz_h"));
+            map.insert(AttractorType::SprottLinzI, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_i.wgsl"), &sim_bind_layout, "sim_sprott_linz_i"));
+            map.insert(AttractorType::SprottLinzJ, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_j.wgsl"), &sim_bind_layout, "sim_sprott_linz_j"));
+            map.insert(AttractorType::SprottLinzK, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_k.wgsl"), &sim_bind_layout, "sim_sprott_linz_k"));
+            map.insert(AttractorType::SprottLinzL, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_l.wgsl"), &sim_bind_layout, "sim_sprott_linz_l"));
+            map.insert(AttractorType::SprottLinzM, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_m.wgsl"), &sim_bind_layout, "sim_sprott_linz_m"));
+            map.insert(AttractorType::SprottLinzN, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_n.wgsl"), &sim_bind_layout, "sim_sprott_linz_n"));
+            map.insert(AttractorType::SprottLinzO, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_o.wgsl"), &sim_bind_layout, "sim_sprott_linz_o"));
+            map.insert(AttractorType::SprottLinzP, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_p.wgsl"), &sim_bind_layout, "sim_sprott_linz_p"));
+            map.insert(AttractorType::SprottLinzQ, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_q.wgsl"), &sim_bind_layout, "sim_sprott_linz_q"));
+            map.insert(AttractorType::SprottLinzR, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_r.wgsl"), &sim_bind_layout, "sim_sprott_linz_r"));
+            map.insert(AttractorType::SprottLinzS, make_sim_pipeline(device, include_str!("../shaders/sim_sprott_linz_s.wgsl"), &sim_bind_layout, "sim_sprott_linz_s"));
+            map.insert(AttractorType::Act, make_sim_pipeline(device, include_str!("../shaders/sim_act.wgsl"), &sim_bind_layout, "sim_act"));
+            map.insert(AttractorType::AnishchenkoAstakhov, make_sim_pipeline(device, include_str!("../shaders/sim_anishchenko_astakhov.wgsl"), &sim_bind_layout, "sim_anishchenko_astakhov"));
+            map.insert(AttractorType::Arnold, make_sim_pipeline(device, include_str!("../shaders/sim_arnold.wgsl"), &sim_bind_layout, "sim_arnold"));
+            map.insert(AttractorType::BoualiIii, make_sim_pipeline(device, include_str!("../shaders/sim_bouali_iii.wgsl"), &sim_bind_layout, "sim_bouali_iii"));
+            map.insert(AttractorType::Burgers, make_sim_pipeline(device, include_str!("../shaders/sim_burgers.wgsl"), &sim_bind_layout, "sim_burgers"));
+            map.insert(AttractorType::BusinessCycleMap, make_sim_pipeline(device, include_str!("../shaders/sim_business_cycle_map.wgsl"), &sim_bind_layout, "sim_business_cycle_map"));
+            map.insert(AttractorType::Cathala, make_sim_pipeline(device, include_str!("../shaders/sim_cathala.wgsl"), &sim_bind_layout, "sim_cathala"));
+            map.insert(AttractorType::ChuaCubic, make_sim_pipeline(device, include_str!("../shaders/sim_chua_cubic.wgsl"), &sim_bind_layout, "sim_chua_cubic"));
+            map.insert(AttractorType::Coullet, make_sim_pipeline(device, include_str!("../shaders/sim_coullet.wgsl"), &sim_bind_layout, "sim_coullet"));
+            map.insert(AttractorType::Dadras, make_sim_pipeline(device, include_str!("../shaders/sim_dadras.wgsl"), &sim_bind_layout, "sim_dadras"));
+            map.insert(AttractorType::ElhadjSprott, make_sim_pipeline(device, include_str!("../shaders/sim_elhadj_sprott.wgsl"), &sim_bind_layout, "sim_elhadj_sprott"));
+            map.insert(AttractorType::ElhadjSprottA, make_sim_pipeline(device, include_str!("../shaders/sim_elhadj_sprott_a.wgsl"), &sim_bind_layout, "sim_elhadj_sprott_a"));
+            map.insert(AttractorType::ElhadjSprottCMap, make_sim_pipeline(device, include_str!("../shaders/sim_elhadj_sprott_c_map.wgsl"), &sim_bind_layout, "sim_elhadj_sprott_c_map"));
+            map.insert(AttractorType::FourWing, make_sim_pipeline(device, include_str!("../shaders/sim_four_wing.wgsl"), &sim_bind_layout, "sim_four_wing"));
+            map.insert(AttractorType::FourWing2, make_sim_pipeline(device, include_str!("../shaders/sim_four_wing2.wgsl"), &sim_bind_layout, "sim_four_wing2"));
+            map.insert(AttractorType::FourWing3, make_sim_pipeline(device, include_str!("../shaders/sim_four_wing3.wgsl"), &sim_bind_layout, "sim_four_wing3"));
+            map.insert(AttractorType::Gingerbread, make_sim_pipeline(device, include_str!("../shaders/sim_gingerbread.wgsl"), &sim_bind_layout, "sim_gingerbread"));
+            map.insert(AttractorType::GumowskiMira, make_sim_pipeline(device, include_str!("../shaders/sim_gumowski_mira.wgsl"), &sim_bind_layout, "sim_gumowski_mira"));
+            map.insert(AttractorType::Hca, make_sim_pipeline(device, include_str!("../shaders/sim_hca.wgsl"), &sim_bind_layout, "sim_hca"));
+            map.insert(AttractorType::HeagyHammel, make_sim_pipeline(device, include_str!("../shaders/sim_heagy_hammel.wgsl"), &sim_bind_layout, "sim_heagy_hammel"));
+            map.insert(AttractorType::Hopalong, make_sim_pipeline(device, include_str!("../shaders/sim_hopalong.wgsl"), &sim_bind_layout, "sim_hopalong"));
+            map.insert(AttractorType::Ikeda, make_sim_pipeline(device, include_str!("../shaders/sim_ikeda.wgsl"), &sim_bind_layout, "sim_ikeda"));
+            map.insert(AttractorType::Ikeda1, make_sim_pipeline(device, include_str!("../shaders/sim_ikeda1.wgsl"), &sim_bind_layout, "sim_ikeda1"));
+            map.insert(AttractorType::LiuChen, make_sim_pipeline(device, include_str!("../shaders/sim_liu_chen.wgsl"), &sim_bind_layout, "sim_liu_chen"));
+            map.insert(AttractorType::LorenzMod1, make_sim_pipeline(device, include_str!("../shaders/sim_lorenz_mod1.wgsl"), &sim_bind_layout, "sim_lorenz_mod1"));
+            map.insert(AttractorType::LorenzMod2, make_sim_pipeline(device, include_str!("../shaders/sim_lorenz_mod2.wgsl"), &sim_bind_layout, "sim_lorenz_mod2"));
+            map.insert(AttractorType::LueChen, make_sim_pipeline(device, include_str!("../shaders/sim_lue_chen.wgsl"), &sim_bind_layout, "sim_lue_chen"));
+            map.insert(AttractorType::Mira, make_sim_pipeline(device, include_str!("../shaders/sim_mira.wgsl"), &sim_bind_layout, "sim_mira"));
+            map.insert(AttractorType::ModifiedLozi, make_sim_pipeline(device, include_str!("../shaders/sim_modified_lozi.wgsl"), &sim_bind_layout, "sim_modified_lozi"));
+            map.insert(AttractorType::MultiChuaII, make_sim_pipeline(device, include_str!("../shaders/sim_multi_chua_ii.wgsl"), &sim_bind_layout, "sim_multi_chua_ii"));
+            map.insert(AttractorType::MultifoldHenon, make_sim_pipeline(device, include_str!("../shaders/sim_multifold_henon.wgsl"), &sim_bind_layout, "sim_multifold_henon"));
+            map.insert(AttractorType::Popcorn, make_sim_pipeline(device, include_str!("../shaders/sim_popcorn.wgsl"), &sim_bind_layout, "sim_popcorn"));
+            map.insert(AttractorType::Popcorn2, make_sim_pipeline(device, include_str!("../shaders/sim_popcorn2.wgsl"), &sim_bind_layout, "sim_popcorn2"));
+            map.insert(AttractorType::Qi3D, make_sim_pipeline(device, include_str!("../shaders/sim_qi_3d.wgsl"), &sim_bind_layout, "sim_qi_3d"));
+            map.insert(AttractorType::QiChen, make_sim_pipeline(device, include_str!("../shaders/sim_qi_chen.wgsl"), &sim_bind_layout, "sim_qi_chen"));
+            map.insert(AttractorType::Robinson, make_sim_pipeline(device, include_str!("../shaders/sim_robinson.wgsl"), &sim_bind_layout, "sim_robinson"));
+            map.insert(AttractorType::Serpentine, make_sim_pipeline(device, include_str!("../shaders/sim_serpentine.wgsl"), &sim_bind_layout, "sim_serpentine"));
+            map.insert(AttractorType::StrelkovaAnishchenko, make_sim_pipeline(device, include_str!("../shaders/sim_strelkova_anishchenko.wgsl"), &sim_bind_layout, "sim_strelkova_anishchenko"));
+            map.insert(AttractorType::Tsucs1, make_sim_pipeline(device, include_str!("../shaders/sim_tsucs_1.wgsl"), &sim_bind_layout, "sim_tsucs_1"));
+            map.insert(AttractorType::Tsucs2, make_sim_pipeline(device, include_str!("../shaders/sim_tsucs_2.wgsl"), &sim_bind_layout, "sim_tsucs_2"));
+            map.insert(AttractorType::WangSun, make_sim_pipeline(device, include_str!("../shaders/sim_wang_sun.wgsl"), &sim_bind_layout, "sim_wang_sun"));
+            map.insert(AttractorType::DeJong, make_sim_pipeline(device, include_str!("../shaders/sim_de_jong.wgsl"), &sim_bind_layout, "sim_de_jong"));
+            map.insert(AttractorType::MacMillan, make_sim_pipeline(device, include_str!("../shaders/sim_mac_millan.wgsl"), &sim_bind_layout, "sim_mac_millan"));
+            map.insert(AttractorType::MarottoLorenz, make_sim_pipeline(device, include_str!("../shaders/sim_marotto_lorenz.wgsl"), &sim_bind_layout, "sim_marotto_lorenz"));
+            map.insert(AttractorType::MaynardSmith, make_sim_pipeline(device, include_str!("../shaders/sim_maynard_smith.wgsl"), &sim_bind_layout, "sim_maynard_smith"));
+            map.insert(AttractorType::NishikawaKaneko, make_sim_pipeline(device, include_str!("../shaders/sim_nishikawa_kaneko.wgsl"), &sim_bind_layout, "sim_nishikawa_kaneko"));
+            map.insert(AttractorType::QHenon2, make_sim_pipeline(device, include_str!("../shaders/sim_q_henon2.wgsl"), &sim_bind_layout, "sim_q_henon2"));
+            map.insert(AttractorType::RulkovMap, make_sim_pipeline(device, include_str!("../shaders/sim_rulkov_map.wgsl"), &sim_bind_layout, "sim_rulkov_map"));
+            map.insert(AttractorType::SineDelay, make_sim_pipeline(device, include_str!("../shaders/sim_sine_delay.wgsl"), &sim_bind_layout, "sim_sine_delay"));
+            map.insert(AttractorType::SineSineMap, make_sim_pipeline(device, include_str!("../shaders/sim_sine_sine_map.wgsl"), &sim_bind_layout, "sim_sine_sine_map"));
+            map.insert(AttractorType::Svensson, make_sim_pipeline(device, include_str!("../shaders/sim_svensson.wgsl"), &sim_bind_layout, "sim_svensson"));
+            map.insert(AttractorType::Tinkerbell, make_sim_pipeline(device, include_str!("../shaders/sim_tinkerbell.wgsl"), &sim_bind_layout, "sim_tinkerbell"));
+            map.insert(AttractorType::YangCao, make_sim_pipeline(device, include_str!("../shaders/sim_yang_cao.wgsl"), &sim_bind_layout, "sim_yang_cao"));
+            map.insert(AttractorType::Zhou, make_sim_pipeline(device, include_str!("../shaders/sim_zhou.wgsl"), &sim_bind_layout, "sim_zhou"));
+            map.insert(AttractorType::ZhouChen, make_sim_pipeline(device, include_str!("../shaders/sim_zhou_chen.wgsl"), &sim_bind_layout, "sim_zhou_chen"));
             map
         };
 
@@ -1313,6 +1405,223 @@ fn make_attractor_states(num: u32, config: &AttractorConfig, extra_steps: u64, r
                   + p[30]*(p[31]*x+p[32]).sin() + p[33]*(p[34]*y+p[35]).sin() + p[36]*(p[37]*z+p[38]).sin(),
         )),
         AttractorType::PolySprott => make_map_states(num, p, extra_steps, poly_sprott_eval),
+        AttractorType::GenesioTesi      => make_genesio_tesi_states(num, p, extra_steps, rng_seed),
+        AttractorType::Arneodo          => make_arneodo_states(num, p, extra_steps, rng_seed),
+        AttractorType::ChenCelikovsky   => make_chen_celikovsky_states(num, p, extra_steps, rng_seed),
+        AttractorType::ShimizuMorioka   => make_shimizu_morioka_states(num, p, extra_steps, rng_seed),
+        AttractorType::ThreeCellsCnn    => make_three_cells_cnn_states(num, p, extra_steps, rng_seed),
+        AttractorType::Rucklidge        => make_rucklidge_states(num, p, extra_steps, rng_seed),
+        AttractorType::RayleighBenard   => make_rayleigh_benard_states(num, p, extra_steps, rng_seed),
+        AttractorType::BurkeShaw        => make_burke_shaw_states(num, p, extra_steps, rng_seed),
+        AttractorType::Sakarya          => make_sakarya_states(num, p, extra_steps, rng_seed),
+        AttractorType::StrizhakKawczynski => make_strizhak_kawczynski_states(num, p, extra_steps, rng_seed),
+        AttractorType::Bouali           => make_bouali_states(num, p, extra_steps, rng_seed),
+        AttractorType::Halvorsen        => make_halvorsen_states(num, p, extra_steps, rng_seed),
+        AttractorType::Aizawa           => make_aizawa_states(num, p, extra_steps, rng_seed),
+        AttractorType::DequanLi         => make_dequan_li_states(num, p, extra_steps, rng_seed),
+        AttractorType::Hadley           => make_hadley_states(num, p, extra_steps, rng_seed),
+        AttractorType::NoseHoover       => make_nose_hoover_states(num, p, extra_steps, rng_seed),
+        AttractorType::NewtonLeipnik    => make_newton_leipnik_states(num, p, extra_steps, rng_seed),
+        AttractorType::Finance          => make_finance_states(num, p, extra_steps, rng_seed),
+        AttractorType::ChenLee          => make_chen_lee_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzB => make_sprott_linz_b_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzC => make_sprott_linz_c_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzD => make_sprott_linz_d_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzE => make_sprott_linz_e_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzF => make_sprott_linz_f_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzG => make_sprott_linz_g_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzH => make_sprott_linz_h_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzI => make_sprott_linz_i_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzJ => make_sprott_linz_j_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzK => make_sprott_linz_k_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzL => make_sprott_linz_l_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzM => make_sprott_linz_m_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzN => make_sprott_linz_n_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzO => make_sprott_linz_o_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzP => make_sprott_linz_p_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzQ => make_sprott_linz_q_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzR => make_sprott_linz_r_states(num, p, extra_steps, rng_seed),
+        AttractorType::SprottLinzS => make_sprott_linz_s_states(num, p, extra_steps, rng_seed),
+        AttractorType::Act => make_act_states(num, p, extra_steps, rng_seed),
+        AttractorType::AnishchenkoAstakhov => make_anishchenko_astakhov_states(num, p, extra_steps, rng_seed),
+        AttractorType::Arnold => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let a = p[0];
+            (
+                (x + y + a * (2.0 * std::f32::consts::PI * y).cos()).rem_euclid(1.0),
+                (x + 2.0 * y).rem_euclid(1.0),
+                0.0,
+            )
+        }),
+        AttractorType::BoualiIii => make_bouali_iii_states(num, p, extra_steps, rng_seed),
+        AttractorType::Burgers => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            ((1.0 - a) * x - y * y, (1.0 + b) * y + x * y, 0.0)
+        }),
+        AttractorType::BusinessCycleMap => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (x + y, a * y - (a + 1.0) * y * y * y - b * x, 0.0)
+        }),
+        AttractorType::Cathala => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (a * x + y, b + x * x, 0.0)
+        }),
+        AttractorType::ChuaCubic => make_chua_cubic_states(num, p, extra_steps, rng_seed),
+        AttractorType::Coullet => make_coullet_states(num, p, extra_steps, rng_seed),
+        AttractorType::Dadras => make_dadras_states(num, p, extra_steps, rng_seed),
+        AttractorType::ElhadjSprott => make_elhadj_sprott_states(num, p, extra_steps, rng_seed),
+        AttractorType::ElhadjSprottA => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (1.0 - a * y * y + b * x, x, 0.0)
+        }),
+        AttractorType::ElhadjSprottCMap => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (-a * x * x + y, b - x.abs(), 0.0)
+        }),
+        AttractorType::FourWing => make_four_wing_states(num, p, extra_steps, rng_seed),
+        AttractorType::FourWing2 => make_four_wing2_states(num, p, extra_steps, rng_seed),
+        AttractorType::FourWing3 => make_four_wing3_states(num, p, extra_steps, rng_seed),
+        AttractorType::Gingerbread => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (1.0 - a * x.abs() + b * y, x, 0.0)
+        }),
+        AttractorType::GumowskiMira => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let b = p[1];
+            fn f(t: f32, b: f32) -> f32 { b * t + (2.0 * (1.0 - b) * t * t) / (1.0 + t * t) }
+            let a = p[0];
+            let nx = y + a * (1.0 - 0.05 * y * y) * y + f(x, b);
+            let ny = -x + f(nx, b);
+            (nx, ny, 0.0)
+        }),
+        AttractorType::Hca => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, c) = (p[0], p[1]);
+            (1.0 - a * x * x + c * (y * y - x * x), 1.0 - a * y * y + c * (x * x - y * y), 0.0)
+        }),
+        AttractorType::HeagyHammel => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, s, b) = (p[0], p[1], p[2]);
+            (a * (1.0 - s * (2.0 * std::f32::consts::PI * y).cos()) * x * (1.0 - x), (y + b).rem_euclid(1.0), 0.0)
+        }),
+        AttractorType::Hopalong => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c) = (p[0], p[1], p[2]);
+            let sign = if x >= 0.0 { 1.0 } else { -1.0 };
+            (y - sign * (b * x - c).abs().sqrt(), a - x, 0.0)
+        }),
+        AttractorType::Ikeda => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (c, u) = (p[0], p[1]);
+            let t = c - 6.0 / (1.0 + x * x + y * y);
+            (1.0 + u * (x * t.cos() - y * t.sin()), u * (x * t.sin() + y * t.cos()), 0.0)
+        }),
+        AttractorType::Ikeda1 => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            let t = c - d / (1.0 + x * x + y * y);
+            (a + b * (x * t.cos() - y * t.sin()), b * (x * t.sin() + y * t.cos()), 0.0)
+        }),
+        AttractorType::LiuChen => make_liu_chen_states(num, p, extra_steps, rng_seed),
+        AttractorType::LorenzMod1 => make_lorenz_mod1_states(num, p, extra_steps, rng_seed),
+        AttractorType::LorenzMod2 => make_lorenz_mod2_states(num, p, extra_steps, rng_seed),
+        AttractorType::LueChen => make_lue_chen_states(num, p, extra_steps, rng_seed),
+        AttractorType::Mira => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let a = p[0];
+            let b = p[1];
+            fn f(t: f32, a: f32) -> f32 { a * t + (2.0 * (1.0 - a) * t * t) / (1.0 + t * t) }
+            let nx = b * y + f(x, a);
+            let ny = -x + f(nx, a);
+            (nx, ny, 0.0)
+        }),
+        AttractorType::ModifiedLozi => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (1.0 + a * (x.abs() - y * y) + y, b * x, 0.0)
+        }),
+        AttractorType::MultiChuaII => make_multi_chua_ii_states(num, p, extra_steps, rng_seed),
+        AttractorType::MultifoldHenon => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (1.0 - a * x.sin() + b * y, x, 0.0)
+        }),
+        AttractorType::Popcorn => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (a * (y + (b * y).tan()).sin(), a * (x + (b * x).tan()).sin(), 0.0)
+        }),
+        AttractorType::Popcorn2 => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            let nx = x - a * (y + (b * y).tan()).sin();
+            let ny = y - a * (nx + (b * nx).tan()).sin();
+            (nx, ny, 0.0)
+        }),
+        AttractorType::Qi3D => make_qi_3d_states(num, p, extra_steps, rng_seed),
+        AttractorType::QiChen => make_qi_chen_states(num, p, extra_steps, rng_seed),
+        AttractorType::Robinson => make_robinson_states(num, p, extra_steps, rng_seed),
+        AttractorType::Serpentine => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let a = p[0];
+            let k = 2.0_f32.powf(a);
+            ((1.0 / (k * x).tan()).atan(), (k * y).sin() * (k * y).cos(), 0.0)
+        }),
+        AttractorType::StrelkovaAnishchenko => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (1.0 - a * x * x + b * (y - x), 1.0 - a * y * y + b * (x - y), 0.0)
+        }),
+        AttractorType::Tsucs1 => make_tsucs_1_states(num, p, extra_steps, rng_seed),
+        AttractorType::Tsucs2 => make_tsucs_2_states(num, p, extra_steps, rng_seed),
+        AttractorType::WangSun => make_wang_sun_states(num, p, extra_steps, rng_seed),
+        AttractorType::DeJong => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            ((a * y).sin() - (b * x).cos(), (c * x).sin() - (d * y).cos(), 0.0)
+        }),
+        AttractorType::MacMillan => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (y, -x + 2.0 * a * (y / (1.0 + y * y)) + b * y, 0.0)
+        }),
+        AttractorType::MarottoLorenz => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            let s = a * x + b * y;
+            ((1.0 - s) * s, x, 0.0)
+        }),
+        AttractorType::MaynardSmith => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b) = (p[0], p[1]);
+            (y, a * y + b - x * x, 0.0)
+        }),
+        AttractorType::NishikawaKaneko => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c) = (p[0], p[1], p[2]);
+            (
+                a * x * (1.0 - x) + b * (2.0 * std::f32::consts::PI * y).sin(),
+                (y + c).rem_euclid(1.0),
+                0.0,
+            )
+        }),
+        AttractorType::QHenon2 => make_map_states(num, p, extra_steps, |p, x, y, w| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            (
+                a - x * x + b * y + c * (2.0 * std::f32::consts::PI * w).cos(),
+                x,
+                (w + d).rem_euclid(1.0),
+            )
+        }),
+        AttractorType::RulkovMap => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c) = (p[0], p[1], p[2]);
+            (a / (1.0 + x * x) + y, y - b * x - c, 0.0)
+        }),
+        AttractorType::SineDelay => make_map_states(num, p, extra_steps, |p, u, v, _z| {
+            let (a, b) = (p[0], p[1]);
+            (v, b * u + a * v.sin(), 0.0)
+        }),
+        AttractorType::SineSineMap => make_map_states(num, p, extra_steps, |p, x, _y, _z| {
+            let a = p[0];
+            (x.sin() - (a * x).sin(), x, 0.0)
+        }),
+        AttractorType::Svensson => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            (d * (a * x).sin() - (b * y).sin(), c * (a * x).cos() + (b * y).cos(), 0.0)
+        }),
+        AttractorType::Tinkerbell => make_map_states(num, p, extra_steps, |p, x, y, _z| {
+            let (a, b, c, d) = (p[0], p[1], p[2], p[3]);
+            (x * x - y * y + a * x + b * y, 2.0 * x * y + c * x + d * y, 0.0)
+        }),
+        AttractorType::YangCao => make_map_states(num, p, extra_steps, |p, w, s, _z| {
+            let (a, b, c, u, _m) = (p[0], p[1], p[2], p[3], p[4]);
+            let _ = a; let _ = b;
+            let t = c - 6.0 / (1.0 + w * w + s * s);
+            (1.0 + u * (w * t.cos() - s * t.sin()), u * (w * t.sin() + s * t.cos()), 0.0)
+        }),
+        AttractorType::Zhou => make_zhou_states(num, p, extra_steps, rng_seed),
+        AttractorType::ZhouChen => make_zhou_chen_states(num, p, extra_steps, rng_seed),
     }
 }
 
@@ -1725,6 +2034,1661 @@ fn make_map_states_icon_b(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
     states
 }
 
+fn make_genesio_tesi_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.44);
+    let b  = params.get(1).copied().unwrap_or(1.1);
+    let c  = params.get(2).copied().unwrap_or(1.0);
+    let dt = params.get(3).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * z,
+                z + dt * (-c*x - b*y - a*z + x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * z,
+                z + dt * (-c*x - b*y - a*z + x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * y,
+                    y + dt * z,
+                    z + dt * (-c*x - b*y - a*z + x*x),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_arneodo_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(-5.5);
+    let b  = params.get(1).copied().unwrap_or(3.5);
+    let c  = params.get(2).copied().unwrap_or(-1.0);
+    let dt = params.get(3).copied().unwrap_or(0.009);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2200 {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * z,
+                z + dt * (-a*x - b*y - z + c*x*x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * z,
+                z + dt * (-a*x - b*y - z + c*x*x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * y,
+                    y + dt * z,
+                    z + dt * (-a*x - b*y - z + c*x*x*x),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_chen_celikovsky_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(36.0);
+    let b  = params.get(1).copied().unwrap_or(3.0);
+    let c  = params.get(2).copied().unwrap_or(20.0);
+    let dt = params.get(3).copied().unwrap_or(0.002);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 6.0 - 3.0,
+            1.0 + rng_f32(&mut rng) * 6.0 - 3.0,
+            1.0 + rng_f32(&mut rng) * 6.0 - 3.0,
+        );
+        for _ in 0..10000 {
+            let (nx, ny, nz) = (
+                x + dt * (a*(y-x)),
+                y + dt * (-(x*z) + c*y),
+                z + dt * (x*y - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (a*(y-x)),
+                y + dt * (-(x*z) + c*y),
+                z + dt * (x*y - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (a*(y-x)),
+                    y + dt * (-(x*z) + c*y),
+                    z + dt * (x*y - b*z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_shimizu_morioka_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.75);
+    let b  = params.get(1).copied().unwrap_or(0.45);
+    let dt = params.get(2).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * ((1.0-z)*x - a*y),
+                z + dt * (x*x - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * ((1.0-z)*x - a*y),
+                z + dt * (x*x - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * y,
+                    y + dt * ((1.0-z)*x - a*y),
+                    z + dt * (x*x - b*z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn satur_cnn(v: f32) -> f32 { 0.5 * ((v + 1.0).abs() - (v - 1.0).abs()) }
+
+fn make_three_cells_cnn_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let p1 = params.get(0).copied().unwrap_or(1.24);
+    let p2 = params.get(1).copied().unwrap_or(1.1);
+    let r  = params.get(2).copied().unwrap_or(4.4);
+    let s  = params.get(3).copied().unwrap_or(3.21);
+    let dt = params.get(4).copied().unwrap_or(0.007);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let (hx, hy, hz) = (satur_cnn(x), satur_cnn(y), satur_cnn(z));
+        (
+            x + dt * (-x + p1*hx - s*hy - s*hz),
+            y + dt * (-y - s*hx + p2*hy - r*hz),
+            z + dt * (-z - s*hx + r*hy + hz),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2900 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_rucklidge_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let k  = params.get(0).copied().unwrap_or(2.0);
+    let a  = params.get(1).copied().unwrap_or(6.7);
+    let dt = params.get(2).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * (-k*x + a*y - y*z),
+                y + dt * x,
+                z + dt * (-z + y*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (-k*x + a*y - y*z),
+                y + dt * x,
+                z + dt * (-z + y*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-k*x + a*y - y*z),
+                    y + dt * x,
+                    z + dt * (-z + y*y),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_rayleigh_benard_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(9.0);
+    let r  = params.get(1).copied().unwrap_or(12.0);
+    let b  = params.get(2).copied().unwrap_or(5.0);
+    let dt = params.get(3).copied().unwrap_or(0.05);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..500 {
+            let (nx, ny, nz) = (
+                x + dt * (-a*x + a*y),
+                y + dt * (r*x - y - x*z),
+                z + dt * (x*y - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (-a*x + a*y),
+                y + dt * (r*x - y - x*z),
+                z + dt * (x*y - b*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-a*x + a*y),
+                    y + dt * (r*x - y - x*z),
+                    z + dt * (x*y - b*z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_burke_shaw_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let s  = params.get(0).copied().unwrap_or(10.0);
+    let v  = params.get(1).copied().unwrap_or(4.272);
+    let dt = params.get(2).copied().unwrap_or(0.005);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = (
+                x + dt * (-s*(x+y)),
+                y + dt * (-y - s*x*z),
+                z + dt * (s*x*y + v),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (-s*(x+y)),
+                y + dt * (-y - s*x*z),
+                z + dt * (s*x*y + v),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-s*(x+y)),
+                    y + dt * (-y - s*x*z),
+                    z + dt * (s*x*y + v),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sakarya_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.4);
+    let b  = params.get(1).copied().unwrap_or(0.3);
+    let dt = params.get(2).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            -1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = (
+                x + dt * (-x + y + y*z),
+                y + dt * (-x - y + a*x*z),
+                z + dt * (z - b*x*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (-x + y + y*z),
+                y + dt * (-x - y + a*x*z),
+                z + dt * (z - b*x*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-x + y + y*z),
+                    y + dt * (-x - y + a*x*z),
+                    z + dt * (z - b*x*y),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_strizhak_kawczynski_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a   = params.get(0).copied().unwrap_or(150.0);
+    let b   = params.get(1).copied().unwrap_or(436.6);
+    let b1  = params.get(2).copied().unwrap_or(3.714);
+    let b2  = params.get(3).copied().unwrap_or(21.7);
+    let q   = params.get(4).copied().unwrap_or(0.07);
+    let r   = params.get(5).copied().unwrap_or(0.101115);
+    let ax1 = params.get(6).copied().unwrap_or(10.0);
+    let ax2 = params.get(7).copied().unwrap_or(11.0);
+    let ax3 = params.get(8).copied().unwrap_or(20.0);
+    let dt  = params.get(9).copied().unwrap_or(0.08);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (r*(y - (x-ax1)*(x-ax2)*(x-ax3) - a)),
+            y + dt * (b - b1*z - b2*x - y),
+            z + dt * (q*(x - z)),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 10.0 - 5.0,
+            rng_f32(&mut rng) * 10.0 - 5.0,
+            rng_f32(&mut rng) * 10.0 - 5.0,
+        );
+        for _ in 0..500 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_bouali_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.3);
+    let s  = params.get(1).copied().unwrap_or(1.0);
+    let dt = params.get(2).copied().unwrap_or(0.006);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 3.0 - 1.5,
+            0.1 + rng_f32(&mut rng) * 3.0 - 1.5,
+            0.1 + rng_f32(&mut rng) * 3.0 - 1.5,
+        );
+        for _ in 0..3300 {
+            let (nx, ny, nz) = (
+                x + dt * (x*(4.0-y) + a*z),
+                y + dt * (-y*(1.0-x*x)),
+                z + dt * (-x*(1.5-s*z) - 0.05*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (x*(4.0-y) + a*z),
+                y + dt * (-y*(1.0-x*x)),
+                z + dt * (-x*(1.5-s*z) - 0.05*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (x*(4.0-y) + a*z),
+                    y + dt * (-y*(1.0-x*x)),
+                    z + dt * (-x*(1.5-s*z) - 0.05*z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_halvorsen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(1.4);
+    let dt = params.get(1).copied().unwrap_or(0.005);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = (
+                x + dt * (-a*x - 4.0*y - 4.0*z - y*y),
+                y + dt * (-a*y - 4.0*z - 4.0*x - z*z),
+                z + dt * (-a*z - 4.0*x - 4.0*y - x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (-a*x - 4.0*y - 4.0*z - y*y),
+                y + dt * (-a*y - 4.0*z - 4.0*x - z*z),
+                z + dt * (-a*z - 4.0*x - 4.0*y - x*x),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (-a*x - 4.0*y - 4.0*z - y*y),
+                    y + dt * (-a*y - 4.0*z - 4.0*x - z*z),
+                    z + dt * (-a*z - 4.0*x - 4.0*y - x*x),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_aizawa_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.95);
+    let b  = params.get(1).copied().unwrap_or(0.7);
+    let c  = params.get(2).copied().unwrap_or(0.6);
+    let d  = params.get(3).copied().unwrap_or(3.5);
+    let e  = params.get(4).copied().unwrap_or(0.25);
+    let f  = params.get(5).copied().unwrap_or(0.10);
+    let dt = params.get(6).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * ((z-b)*x - d*y),
+            y + dt * (d*x + (z-b)*y),
+            z + dt * (c + a*z - (z*z*z)/3.0 - (x*x+y*y)*(1.0+e*z) + f*z*x*x*x),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_dequan_li_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(40.0);
+    let c  = params.get(1).copied().unwrap_or(1.833);
+    let d  = params.get(2).copied().unwrap_or(0.16);
+    let e  = params.get(3).copied().unwrap_or(0.65);
+    let k  = params.get(4).copied().unwrap_or(55.0);
+    let f  = params.get(5).copied().unwrap_or(20.0);
+    let dt = params.get(6).copied().unwrap_or(0.0001);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a*(y-x) + d*x*z),
+            y + dt * (k*x + f*y - x*z),
+            z + dt * (c*z + x*y - e*x*x),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.349 + (rng_f32(&mut rng) * 1.0 - 0.5),
+            rng_f32(&mut rng) * 1.0 - 0.5,
+            -0.160 + (rng_f32(&mut rng) * 1.0 - 0.5),
+        );
+        for _ in 0..50_000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_hadley_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.20);
+    let b  = params.get(1).copied().unwrap_or(4.0);
+    let f  = params.get(2).copied().unwrap_or(8.0);
+    let g  = params.get(3).copied().unwrap_or(1.0);
+    let dt = params.get(4).copied().unwrap_or(0.005);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (-y*y - z*z - a*x + a*f),
+            y + dt * (x*y - b*x*z - y + g),
+            z + dt * (b*x*y + x*z - z),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_nose_hoover_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(1.5);
+    let dt = params.get(1).copied().unwrap_or(0.009);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..2200 {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * (-x + y*z),
+                z + dt * (a - y*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * y,
+                y + dt * (-x + y*z),
+                z + dt * (a - y*y),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * y,
+                    y + dt * (-x + y*z),
+                    z + dt * (a - y*y),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_newton_leipnik_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.4);
+    let b  = params.get(1).copied().unwrap_or(0.175);
+    let dt = params.get(2).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (-a*x + y + 10.0*y*z),
+            y + dt * (-x - 0.4*y + 5.0*x*z),
+            z + dt * (b*z - 5.0*x*y),
+        )
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.349 + (rng_f32(&mut rng) * 1.0 - 0.5),
+            rng_f32(&mut rng) * 1.0 - 0.5,
+            -0.160 + (rng_f32(&mut rng) * 1.0 - 0.5),
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_finance_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.001);
+    let b  = params.get(1).copied().unwrap_or(0.2);
+    let c  = params.get(2).copied().unwrap_or(1.1);
+    let dt = params.get(3).copied().unwrap_or(0.03);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..700 {
+            let (nx, ny, nz) = (
+                x + dt * ((1.0/b - a)*x + z + x*y),
+                y + dt * (-b*y - x*x),
+                z + dt * (-x - c*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * ((1.0/b - a)*x + z + x*y),
+                y + dt * (-b*y - x*x),
+                z + dt * (-x - c*z),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * ((1.0/b - a)*x + z + x*y),
+                    y + dt * (-b*y - x*x),
+                    z + dt * (-x - c*z),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_chen_lee_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(5.0);
+    let b  = params.get(1).copied().unwrap_or(-10.0);
+    let c  = params.get(2).copied().unwrap_or(-0.38);
+    let dt = params.get(3).copied().unwrap_or(0.004);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            4.50 + rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..5000 {
+            let (nx, ny, nz) = (
+                x + dt * (a*x - y*z),
+                y + dt * (b*y + x*z),
+                z + dt * (c*z + x*y/3.0),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = (
+                x + dt * (a*x - y*z),
+                y + dt * (b*y + x*z),
+                z + dt * (c*z + x*y/3.0),
+            );
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = (
+                    x + dt * (a*x - y*z),
+                    y + dt * (b*y + x*z),
+                    z + dt * (c*z + x*y/3.0),
+                );
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+fn make_sprott_linz_b_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let dt = params.get(0).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (y*z), y + dt * (x - y), z + dt * (1.0 - x*y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_c_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let dt = params.get(0).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (y*z), y + dt * (x - y), z + dt * (1.0 - x*x))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_d_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(3.0);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-y), y + dt * (x + z), z + dt * (x*z + a*y*y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_e_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(4.0);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (y*z), y + dt * (x*x - y), z + dt * (1.0 - a*x))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_f_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.5);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (y + z), y + dt * (-x + a*y), z + dt * (x*x - z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_g_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.4);
+    let dt = params.get(1).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (a*x + z), y + dt * (x*z - y), z + dt * (-x + y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_h_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.5);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-y + z*z), y + dt * (x + a*y), z + dt * (x - z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+            rng_f32(&mut rng) * 4.0 - 2.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_i_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(-0.2);
+    let dt = params.get(1).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (a*y), y + dt * (x + z), z + dt * (x + y*y - z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_j_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(2.0);
+    let dt = params.get(1).copied().unwrap_or(0.006);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (a*z), y + dt * (-a*y + z), z + dt * (-x + y + y*y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..3300 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_k_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.3);
+    let dt = params.get(1).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (x*y - z), y + dt * (x - y), z + dt * (x + a*z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_l_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(3.9);
+    let b  = params.get(1).copied().unwrap_or(0.9);
+    let dt = params.get(2).copied().unwrap_or(0.005);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (y + a*z), y + dt * (b*x*x - y), z + dt * (1.0 - x))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_m_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(1.7);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-z), y + dt * (-x*x - y), z + dt * (a + a*x + y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_n_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(2.0);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-a*y), y + dt * (x + z*z), z + dt * (1.0 + y - a*z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_o_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(2.7);
+    let dt = params.get(1).copied().unwrap_or(0.009);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * y, y + dt * (x - z), z + dt * (x + x*z + a*y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2200 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_p_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(2.7);
+    let dt = params.get(1).copied().unwrap_or(0.01);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (a*y + z), y + dt * (-x + y*y), z + dt * (x + y))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_q_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(3.4);
+    let b  = params.get(1).copied().unwrap_or(0.5);
+    let dt = params.get(2).copied().unwrap_or(0.008);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-z), y + dt * (x - y), z + dt * (a*x + y*y + b*z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2500 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_r_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(0.9);
+    let b  = params.get(1).copied().unwrap_or(0.4);
+    let dt = params.get(2).copied().unwrap_or(0.02);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (a - y), y + dt * (b + z), z + dt * (x*y - z))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+            rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..1000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_sprott_linz_s_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a  = params.get(0).copied().unwrap_or(4.0);
+    let dt = params.get(1).copied().unwrap_or(0.007);
+
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * (-x - a*y), y + dt * (x + z*z), z + dt * (1.0 + x))
+    };
+
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2900 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
 /// Extract a seed (a known-good point on the attractor) from a state list.
 /// Uses the midpoint of the list so it is well past any transient.
 fn seed_from_states(states: &[[f32; 4]]) -> [f32; 3] {
@@ -1931,4 +3895,1022 @@ fn bgl_uniform(binding: u32, visibility: wgpu::ShaderStages) -> wgpu::BindGroupL
         },
         count: None,
     }
+}
+fn make_act_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(1.8);
+    let b = params.get(1).copied().unwrap_or(-0.07);
+    let d = params.get(2).copied().unwrap_or(1.5);
+    let m = params.get(3).copied().unwrap_or(0.02);
+    let dt = params.get(4).copied().unwrap_or(0.01);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * (x - y);
+        let dy = -4.0 * a * y + x * z + m * x * x * x;
+        let dz = -d * a * z + x * y + b * z * z;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_anishchenko_astakhov_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let m = params.get(0).copied().unwrap_or(1.2);
+    let g = params.get(1).copied().unwrap_or(0.5);
+    let dt = params.get(2).copied().unwrap_or(0.01);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let f = if x > 0.0 { 1.0 } else { 0.0 };
+        let dx = m * x + y - x * z;
+        let dy = -x;
+        let dz = -g * z + g * f * x * x;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_bouali_iii_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(3.0);
+    let b = params.get(1).copied().unwrap_or(2.2);
+    let c = params.get(2).copied().unwrap_or(1.0);
+    let d = params.get(3).copied().unwrap_or(0.001);
+    let dt = params.get(4).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * x * (1.0 - y) - b * z),
+            y + dt * (-c * y * (1.0 - x * x)),
+            z + dt * (d * x),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+
+fn make_chua_cubic_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let alpha = params.get(0).copied().unwrap_or(10.0);
+    let beta  = params.get(1).copied().unwrap_or(16.0);
+    let c     = params.get(2).copied().unwrap_or(-0.143);
+    let dt    = params.get(3).copied().unwrap_or(0.005);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (alpha * (y - x * x * x - c * x)),
+            y + dt * (x - y + z),
+            z + dt * (-beta * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_coullet_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(0.8);
+    let b = params.get(1).copied().unwrap_or(-1.1);
+    let c = params.get(2).copied().unwrap_or(-0.45);
+    let d = params.get(3).copied().unwrap_or(-1.0);
+    let dt = params.get(4).copied().unwrap_or(0.01).max(1e-9);
+    let warm = ((20.0 / dt) as usize).clamp(500, 20_000) as u32;
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (x + dt * y, y + dt * z, z + dt * (a * x + b * y + c * z + d * x * x * x))
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.41 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.31 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..warm {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_dadras_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let p = params.get(0).copied().unwrap_or(3.0);
+    let q = params.get(1).copied().unwrap_or(2.7);
+    let r = params.get(2).copied().unwrap_or(1.7);
+    let s = params.get(3).copied().unwrap_or(2.0);
+    let e = params.get(4).copied().unwrap_or(9.0);
+    let dt = params.get(5).copied().unwrap_or(0.01);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = y - p * x + q * y * z;
+        let dy = r * y - x * z + z;
+        let dz = s * x * y - e * z;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_elhadj_sprott_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(40.0);
+    let b = params.get(1).copied().unwrap_or(33.0);
+    let c = params.get(2).copied().unwrap_or(10.0);
+    let dt = params.get(3).copied().unwrap_or(0.0005);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * (y - x)),
+            y + dt * (-a * x - b * y * z),
+            z + dt * (-c + y * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.2 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_four_wing_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(4.0);
+    let b = params.get(1).copied().unwrap_or(6.0);
+    let c = params.get(2).copied().unwrap_or(10.0);
+    let d = params.get(3).copied().unwrap_or(5.0);
+    let k = params.get(4).copied().unwrap_or(1.0);
+    let dt = params.get(5).copied().unwrap_or(0.005);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * x - b * y * z;
+        let dy = -c * y + x * z;
+        let dz = k * x - d * z + x * y;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..4000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_four_wing2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(-14.0);
+    let b = params.get(1).copied().unwrap_or(5.0);
+    let c = params.get(2).copied().unwrap_or(1.0);
+    let d = params.get(3).copied().unwrap_or(16.0);
+    let e = params.get(4).copied().unwrap_or(-43.0);
+    let f = params.get(5).copied().unwrap_or(1.0);
+    let dt = params.get(6).copied().unwrap_or(0.0005);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * x + b * y + c * y * z),
+            y + dt * (d * y - x * z),
+            z + dt * (e * z + f * x * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            4.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_four_wing3_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(1.0);
+    let dt = params.get(1).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (x + y + y * z),
+            y + dt * (y * z - x * z),
+            z + dt * (-z - a * x * y + 1.0),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -2.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_liu_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(2.4);
+    let b = params.get(1).copied().unwrap_or(-3.78);
+    let c = params.get(2).copied().unwrap_or(14.0);
+    let d = params.get(3).copied().unwrap_or(-11.0);
+    let e = params.get(4).copied().unwrap_or(4.0);
+    let f = params.get(5).copied().unwrap_or(5.58);
+    let g = params.get(6).copied().unwrap_or(-1.0);
+    let dt = params.get(7).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * y + b * x + c * y * z),
+            y + dt * (d * y - z + e * x * z),
+            z + dt * (f * z + g * x * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            5.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..3000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_lorenz_mod1_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(0.1);
+    let b = params.get(1).copied().unwrap_or(4.0);
+    let c = params.get(2).copied().unwrap_or(14.0);
+    let d = params.get(3).copied().unwrap_or(0.08);
+    let dt = params.get(4).copied().unwrap_or(0.008);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = -a * x + y * y - z * z + a * c;
+        let dy = x * (y - b * z) + d;
+        let dz = z + x * (b * y + z);
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2500 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_lorenz_mod2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(0.9);
+    let b = params.get(1).copied().unwrap_or(5.0);
+    let c = params.get(2).copied().unwrap_or(9.9);
+    let d = params.get(3).copied().unwrap_or(1.0);
+    let dt = params.get(4).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = -a * x + y * y - z * z + a * c;
+        let dy = x * (y - b * z) + d;
+        let dz = -z + x * (b * y + z);
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..20000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_lue_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(-10.0);
+    let b = params.get(1).copied().unwrap_or(-4.0);
+    let c = params.get(2).copied().unwrap_or(18.1);
+    let dt = params.get(3).copied().unwrap_or(0.01);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let denom = if (a + b).abs() < 1e-9 { 1e-9 } else { a + b };
+        let dx = -a * b * x / denom - y * z + c;
+        let dy = a * y + x * z;
+        let dz = b * z + x * y;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            2.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+fn make_multi_chua_ii_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let alpha = params.get(0).copied().unwrap_or(9.0);
+    let beta  = params.get(1).copied().unwrap_or(14.286);
+    let dt    = params.get(2).copied().unwrap_or(0.001);
+    const M: [f32; 6] = [-1.0 / 7.0, 2.0 / 7.0, -4.0 / 7.0, 2.0 / 7.0, -4.0 / 7.0, 2.0 / 7.0];
+    const C: [f32; 6] = [0.0, 1.0, 2.15, 3.6, 8.2, 13.0];
+    let f_nonlinear = |x: f32| -> f32 {
+        let mut sum = 0.0;
+        for k in 1..6 {
+            sum += (M[k - 1] - M[k]) * ((x + C[k]).abs() - (x - C[k]).abs());
+        }
+        M[5] * x + 0.5 * sum
+    };
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (alpha * (y - f_nonlinear(x))),
+            y + dt * (x - y + z),
+            z + dt * (-beta * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -0.2 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.3 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+fn make_qi_3d_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(16.0);
+    let b = params.get(1).copied().unwrap_or(43.0);
+    let c = params.get(2).copied().unwrap_or(-18.0);
+    let d = params.get(3).copied().unwrap_or(16.0);
+    let e = params.get(4).copied().unwrap_or(-1.0);
+    let dt = params.get(5).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * (y - x) + e * y * z;
+        let dy = c * x + d * y - x * z;
+        let dz = x * y - b * z;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -4.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..20000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_qi_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(38.0);
+    let b = params.get(1).copied().unwrap_or(2.666);
+    let c = params.get(2).copied().unwrap_or(80.0);
+    let dt = params.get(3).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * (y - x) + y * z;
+        let dy = c * x - y - x * z;
+        let dz = x * y - b * z;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -4.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..20000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+fn make_robinson_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(0.71);
+    let b = params.get(1).copied().unwrap_or(1.8587);
+    let c = params.get(2).copied().unwrap_or(0.7061);
+    let d = params.get(3).copied().unwrap_or(0.1);
+    let v = params.get(4).copied().unwrap_or(1.0);
+    let dt = params.get(5).copied().unwrap_or(0.01);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = y;
+        let dy = x - 2.0 * x * x * x - a * y + b * x * x * y - v * y * z;
+        let dz = -c * z + d * x * x;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+
+fn make_tsucs_1_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(40.0);
+    let c = params.get(1).copied().unwrap_or(0.833);
+    let d = params.get(2).copied().unwrap_or(0.5);
+    let e = params.get(3).copied().unwrap_or(0.65);
+    let f = params.get(4).copied().unwrap_or(20.0);
+    let dt = params.get(5).copied().unwrap_or(0.001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * (y - x) + d * x * z;
+        let dy = f * y - x * z;
+        let dz = c * z + x * y - e * x * x;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..5000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_tsucs_2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(40.0);
+    let b = params.get(1).copied().unwrap_or(55.0);
+    let c = params.get(2).copied().unwrap_or(1.833);
+    let d = params.get(3).copied().unwrap_or(0.16);
+    let e = params.get(4).copied().unwrap_or(0.65);
+    let f = params.get(5).copied().unwrap_or(20.0);
+    let dt = params.get(6).copied().unwrap_or(0.0001);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        let dx = a * (y - x) + d * x * z;
+        let dy = b * x - x * z + f * y;
+        let dz = c * z + x * y - e * x * x;
+        (x + dt * dx, y + dt * dy, z + dt * dz)
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            -0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..5000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_wang_sun_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(0.2);
+    let b = params.get(1).copied().unwrap_or(-0.01);
+    let c = params.get(2).copied().unwrap_or(1.0);
+    let d = params.get(3).copied().unwrap_or(-0.4);
+    let e = params.get(4).copied().unwrap_or(-1.0);
+    let f = params.get(5).copied().unwrap_or(-1.0);
+    let dt = params.get(6).copied().unwrap_or(0.01).max(1e-9);
+    let warm = ((20.0 / dt) as usize).clamp(500, 20_000) as u32;
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * x + c * y * z),
+            y + dt * (b * x + d * y - x * z),
+            z + dt * (e * z + f * x * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            0.30 + rng_f32(&mut rng) * 2.0 - 1.0,
+            0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.00 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..warm {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_zhou_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(10.0);
+    let b = params.get(1).copied().unwrap_or(16.0);
+    let c = params.get(2).copied().unwrap_or(-1.0);
+    let dt = params.get(3).copied().unwrap_or(0.002).max(1e-6);
+    let warm = ((20.0 / dt) as u32).clamp(500, 20_000);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * (y - x)),
+            y + dt * (b * x - x * z),
+            z + dt * (x * y + c * z),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            15.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..warm {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
+}
+
+fn make_zhou_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) -> Vec<[f32; 4]> {
+    let a = params.get(0).copied().unwrap_or(2.97);
+    let b = params.get(1).copied().unwrap_or(0.15);
+    let c = params.get(2).copied().unwrap_or(-3.0);
+    let d = params.get(3).copied().unwrap_or(1.0);
+    let e = params.get(4).copied().unwrap_or(-8.78);
+    let dt = params.get(5).copied().unwrap_or(0.002);
+    let num_groups: u32 = 32;
+    let per_group = (num + num_groups - 1) / num_groups;
+    const INTER: u32 = 100;
+    let mut states = Vec::with_capacity(num as usize);
+    let step = |x: f32, y: f32, z: f32| -> (f32, f32, f32) {
+        (
+            x + dt * (a * x + b * y + y * z),
+            y + dt * (c * y - x * z + d * y * z),
+            z + dt * (e * z - x * y),
+        )
+    };
+    for grp in 0..num_groups {
+        let mut rng = (grp.wrapping_add(1)).wrapping_mul(0x9E3779B9u32).wrapping_add(rng_seed);
+        let (mut x, mut y, mut z) = (
+            3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+            1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
+        );
+        for _ in 0..2000 {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..extra_steps {
+            let (nx, ny, nz) = step(x, y, z);
+            if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+        }
+        for _ in 0..per_group {
+            if states.len() >= num as usize { break; }
+            states.push([x, y, z, f32::from_bits(((states.len() as u32).wrapping_mul(2654435761u32)).max(1))]);
+            for _ in 0..INTER {
+                let (nx, ny, nz) = step(x, y, z);
+                if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
+            }
+        }
+    }
+    states
 }

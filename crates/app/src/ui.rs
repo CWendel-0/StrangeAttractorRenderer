@@ -7,6 +7,7 @@ fn sprott_num_terms(order: usize) -> usize {
     (order + 1) * (order + 2) * (order + 3) / 6
 }
 
+use crate::colorset::ColorSet;
 use crate::gradient::{Gradient, gradient_editor};
 use crate::movie::{MovieStatus, OutputKind};
 use crate::velocity_slider::velocity_slider;
@@ -72,10 +73,18 @@ pub struct UiState {
     pub movie_close_requested:   bool,
     pub movie_job_active:        bool,
     pub movie_status_for_ui:     Option<MovieStatus>,
+
+    // ---- Color sets ----
+    pub color_sets_built_in:        Vec<ColorSet>,
+    pub color_sets_custom:          Vec<ColorSet>,
+    pub color_sets_dirty:           bool,
+    pub color_set_save_dialog_open: bool,
+    pub color_set_save_name:        String,
+    pub color_set_manage_open:      bool,
 }
 
 impl UiState {
-    pub fn new(canvas_width: u32, canvas_height: u32) -> Self {
+    pub fn new(canvas_width: u32, canvas_height: u32, custom_color_sets: Vec<ColorSet>) -> Self {
         Self {
             attractor:  AttractorConfig::new(AttractorType::default()),
             brightness: 1.1,
@@ -126,6 +135,13 @@ impl UiState {
             movie_close_requested:  false,
             movie_job_active:       false,
             movie_status_for_ui:    None,
+
+            color_sets_built_in:        crate::colorset::built_in_color_sets(),
+            color_sets_custom:          custom_color_sets,
+            color_sets_dirty:           false,
+            color_set_save_dialog_open: false,
+            color_set_save_name:        String::new(),
+            color_set_manage_open:      false,
         }
     }
 
@@ -166,10 +182,54 @@ impl UiState {
                         ui.close_menu();
                     }
                 });
+
+                let mut apply_color_set: Option<ColorSet> = None;
+                let mut open_save_dialog = false;
+                let mut open_manage_dialog = false;
+                ui.menu_button("Colors", |ui| {
+                    ui.label("Built-in");
+                    for set in &self.color_sets_built_in {
+                        if ui.button(&set.name).clicked() {
+                            apply_color_set = Some(set.clone());
+                            ui.close_menu();
+                        }
+                    }
+                    if !self.color_sets_custom.is_empty() {
+                        ui.separator();
+                        ui.label("Custom");
+                        for set in &self.color_sets_custom {
+                            if ui.button(&set.name).clicked() {
+                                apply_color_set = Some(set.clone());
+                                ui.close_menu();
+                            }
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Save Current as New Color Set…").clicked() {
+                        open_save_dialog = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("Manage Color Sets…").clicked() {
+                        open_manage_dialog = true;
+                        ui.close_menu();
+                    }
+                });
+                if let Some(set) = apply_color_set {
+                    set.apply(self);
+                }
+                if open_save_dialog {
+                    self.color_set_save_dialog_open = true;
+                    self.color_set_save_name.clear();
+                }
+                if open_manage_dialog {
+                    self.color_set_manage_open = true;
+                }
             });
         });
 
         self.show_movie_dialog(ctx);
+        self.show_color_set_save_dialog(ctx);
+        self.show_color_set_manage_dialog(ctx);
 
         // ---- Floating attractor + parameters window ----
         if !self.movie_job_active {
@@ -591,6 +651,74 @@ impl UiState {
                         });
                 });
         }
+    }
+
+    fn show_color_set_save_dialog(&mut self, ctx: &Context) {
+        if !self.color_set_save_dialog_open {
+            return;
+        }
+        let mut open = self.color_set_save_dialog_open;
+        let mut save_clicked = false;
+        let mut cancel_clicked = false;
+        egui::Window::new("Save Color Set")
+            .open(&mut open)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut self.color_set_save_name);
+                });
+                ui.horizontal(|ui| {
+                    let name_ok = !self.color_set_save_name.trim().is_empty();
+                    if ui.add_enabled(name_ok, egui::Button::new("Save")).clicked() {
+                        save_clicked = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel_clicked = true;
+                    }
+                });
+            });
+        if cancel_clicked {
+            open = false;
+        }
+        if save_clicked {
+            let name = self.color_set_save_name.trim().to_string();
+            let new_set = ColorSet::capture(name, self);
+            self.color_sets_custom.push(new_set);
+            self.color_sets_dirty = true;
+            open = false;
+        }
+        self.color_set_save_dialog_open = open;
+    }
+
+    fn show_color_set_manage_dialog(&mut self, ctx: &Context) {
+        if !self.color_set_manage_open {
+            return;
+        }
+        let mut open = self.color_set_manage_open;
+        let mut remove_idx = None;
+        egui::Window::new("Manage Color Sets")
+            .open(&mut open)
+            .resizable(true)
+            .default_width(280.0)
+            .show(ctx, |ui| {
+                if self.color_sets_custom.is_empty() {
+                    ui.label("No custom color sets yet. Use \"Save Current as New Color Set…\" from the Colors menu.");
+                }
+                for (i, set) in self.color_sets_custom.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(&set.name);
+                        if ui.small_button("Delete").clicked() {
+                            remove_idx = Some(i);
+                        }
+                    });
+                }
+            });
+        if let Some(i) = remove_idx {
+            self.color_sets_custom.remove(i);
+            self.color_sets_dirty = true;
+        }
+        self.color_set_manage_open = open;
     }
 
     fn show_movie_dialog(&mut self, ctx: &Context) {
