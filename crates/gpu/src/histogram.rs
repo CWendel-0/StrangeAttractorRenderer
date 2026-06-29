@@ -19,6 +19,11 @@ pub const SIM_NUM_TRAJECTORIES: u32 = 8_192;
 /// Euler steps each trajectory advances per compute dispatch (≈ one frame).
 pub const SIM_STEPS_PER_DISPATCH: u32 = 512;
 
+/// Fixed resolution of Points mode's light-space ("shadow map") depth
+/// accumulation buffer -- independent of canvas size, like Solid's real
+/// shadow map texture.
+pub const POINTS_LIGHT_BUF_SIZE: u32 = 2048;
+
 /// Initial / post-clear floor for `last_max_density`, in raw accum units
 /// (WEIGHT_SCALE = 1024 per fully-weighted hit). One dispatch alone splats
 /// `SIM_NUM_TRAJECTORIES * SIM_STEPS_PER_DISPATCH` ≈ 4.2M points, easily
@@ -52,6 +57,17 @@ pub enum RenderMode {
     Monochrome,
     /// Two-gradient blend: Gradient A by density, Gradient B by mean speed.
     Light,
+    /// 3-D lit tube mesh around one long CPU-computed trajectory, rasterized
+    /// with a depth buffer -- see `crate::solid`. Never reaches `composite()`;
+    /// `main.rs` branches around the whole dispatch_sim/composite/blit path
+    /// when this mode is active.
+    Solid,
+    /// Screen-space "fake 3D" depth/hit accumulation, lit and reconstructed
+    /// in a single composite pass -- see `crate::points`. Like Solid, never
+    /// reaches `composite()`, but (unlike Solid) still runs `dispatch_sim`
+    /// every frame, which is what fills `points_depth_buf`/`points_hit_buf`/
+    /// `points_light_depth_buf`.
+    Points,
 }
 
 /// How Gradient A (density) and Gradient B (speed) are combined in Light mode.
@@ -130,12 +146,16 @@ impl BlendMode {
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SimParams {
-    view_proj: [f32; 16],  // offset 0,  64 bytes
-    ss_width:  u32,        // offset 64
-    ss_height: u32,        // offset 68
-    steps:     u32,        // offset 72
-    num_traj:  u32,        // offset 76
-    p:         [f32; 172], // offset 80, 688 bytes → total 768 bytes
+    view_proj:       [f32; 16], // offset 0,   64 bytes
+    ss_width:        u32,       // offset 64
+    ss_height:       u32,       // offset 68
+    steps:           u32,       // offset 72
+    num_traj:        u32,       // offset 76
+    light_view_proj: [f32; 16], // offset 80,  64 bytes -- Points mode shadow-buffer splatting
+    points_radius:   u32,       // offset 144 -- Points mode camera-space splat footprint radius
+    light_buf_size:  u32,       // offset 148 -- Points mode shadow buffer resolution (square)
+    _points_pad:     [u32; 2],  // offset 152, keeps `p` 16-byte aligned
+    p:               [f32; 172], // offset 160, 688 bytes → total 848 bytes
 }
 // Safety: repr(C), all fields are Pod/Zeroable, no padding (all fields 4-byte aligned).
 unsafe impl bytemuck::Pod for SimParams {}
@@ -177,6 +197,21 @@ pub struct Histogram {
     sim_state_buf:   wgpu::Buffer,
     sim_params_buf:  wgpu::Buffer,
     cached_sim_bg:   wgpu::BindGroup,
+
+    // ---- Points mode screen-space accumulation buffers ----
+    // Camera-space depth (atomicMax of an inverted/encoded NDC depth -- 0 =
+    // empty, larger = nearer) + hit count (atomicAdd), both sized like
+    // `accum_buf` (ss_width × ss_height), written every dispatch by every
+    // attractor's sim shader regardless of active render mode (harmless
+    // extra bandwidth when not in Points mode). Bounded by screen
+    // resolution, not point count, so accumulating indefinitely is cheap --
+    // this is the whole point of the screen-space redesign.
+    points_depth_buf: wgpu::Buffer,
+    points_hit_buf:   wgpu::Buffer,
+    // Light-space ("shadow map") depth accumulation -- same technique, but
+    // fixed resolution (`POINTS_LIGHT_BUF_SIZE`) and depth-only, since
+    // shadow tests only need "what's nearest the light," not coverage.
+    points_light_depth_buf: wgpu::Buffer,
 
     // ---- horizontal DE pass (accum → de_h_texture) ----
     de_h_pipeline:     wgpu::RenderPipeline,
@@ -277,6 +312,9 @@ impl Histogram {
                 bgl_storage_rw(1, wgpu::ShaderStages::COMPUTE), // accum
                 bgl_storage_rw(2, wgpu::ShaderStages::COMPUTE), // max_density
                 bgl_uniform(3,    wgpu::ShaderStages::COMPUTE), // sim_params
+                bgl_storage_rw(4, wgpu::ShaderStages::COMPUTE), // points_depth -- Points mode camera-space depth, read by PointsRenderer's fill pass
+                bgl_storage_rw(5, wgpu::ShaderStages::COMPUTE), // points_hit -- Points mode camera-space hit count, read by PointsRenderer's fill pass
+                bgl_storage_rw(6, wgpu::ShaderStages::COMPUTE), // points_light_depth -- Points mode light-space shadow buffer, read by PointsRenderer's composite pass
             ],
         });
 
@@ -406,6 +444,14 @@ impl Histogram {
             usage:              wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+
+        // Points mode's screen-space accumulation buffers -- see the
+        // `Histogram` struct fields' doc comments. Written by every
+        // attractor type's sim shader regardless of which render mode is
+        // active (harmless extra bandwidth when not in Points mode).
+        let points_depth_buf = Self::make_points_buf(device, ss_w, ss_h);
+        let points_hit_buf   = Self::make_points_buf(device, ss_w, ss_h);
+        let points_light_depth_buf = Self::make_points_buf(device, POINTS_LIGHT_BUF_SIZE, POINTS_LIGHT_BUF_SIZE);
 
         // Upload initial trajectory states spread across the attractor.
         let initial_states = make_attractor_states(SIM_NUM_TRAJECTORIES, initial_config, 0, 0);
@@ -694,6 +740,7 @@ impl Histogram {
         let cached_sim_bg = Self::make_sim_bg(
             device, &sim_bind_layout,
             &sim_state_buf, &accum_buf, &max_density_buf, &sim_params_buf,
+            &points_depth_buf, &points_hit_buf, &points_light_depth_buf,
         );
         let cached_de_h_bg = Self::make_de_h_bg(
             device, &de_h_bind_layout, &accum_buf, &composite_params_buf,
@@ -720,6 +767,9 @@ impl Histogram {
             sim_bind_layout,
             sim_state_buf,
             sim_params_buf,
+            points_depth_buf,
+            points_hit_buf,
+            points_light_depth_buf,
             de_h_pipeline,
             de_h_bind_layout,
             de_h_texture,
@@ -771,6 +821,8 @@ impl Histogram {
             usage:              wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        self.points_depth_buf = Self::make_points_buf(device, ss_w, ss_h);
+        self.points_hit_buf   = Self::make_points_buf(device, ss_w, ss_h);
 
         let (de_h_texture, de_h_texture_view) = Self::make_de_h_texture(device, width, height);
         self.de_h_texture      = de_h_texture;
@@ -788,6 +840,7 @@ impl Histogram {
         self.cached_sim_bg = Self::make_sim_bg(
             device, &self.sim_bind_layout,
             &self.sim_state_buf, &self.accum_buf, &self.max_density_buf, &self.sim_params_buf,
+            &self.points_depth_buf, &self.points_hit_buf, &self.points_light_depth_buf,
         );
         self.cached_de_h_bg = Self::make_de_h_bg(
             device, &self.de_h_bind_layout, &self.accum_buf, &self.composite_params_buf,
@@ -807,13 +860,31 @@ impl Histogram {
     }
 
     /// Largest supported SS scale ({1, 2, 4}) whose accum buffer fits within
-    /// `device.limits().max_buffer_size` for the given display dimensions.
+    /// `device.limits().max_buffer_size`, and whose ss_width/ss_height stay
+    /// within `device.limits().max_texture_dimension_2d` -- Points mode's
+    /// shaded_tex (points.rs) is a real texture at ss resolution, unlike the
+    /// density path's buffers, which aren't bound by this limit.
     pub fn max_feasible_ss(device: &wgpu::Device, width: u32, height: u32) -> u32 {
         let max_bytes = device.limits().max_buffer_size;
         let base = width as u64 * height as u64 * ACCUM_ELEM_SIZE;
-        if base == 0 { return 4; }
-        let max_ss_sq = max_bytes / base;
-        if max_ss_sq >= 16 { 4 } else if max_ss_sq >= 4 { 2 } else { 1 }
+        let by_buffer = if base == 0 {
+            4
+        } else {
+            let max_ss_sq = max_bytes / base;
+            if max_ss_sq >= 16 { 4 } else if max_ss_sq >= 4 { 2 } else { 1 }
+        };
+
+        let max_dim = device.limits().max_texture_dimension_2d.max(1);
+        let longest = width.max(height).max(1);
+        let by_texture = if longest * 4 <= max_dim {
+            4
+        } else if longest * 2 <= max_dim {
+            2
+        } else {
+            1
+        };
+
+        by_buffer.min(by_texture)
     }
 
     pub fn set_ss_scale(&mut self, device: &wgpu::Device, ss_scale: u32) {
@@ -831,10 +902,13 @@ impl Histogram {
             usage:              wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        self.points_depth_buf = Self::make_points_buf(device, ss_w, ss_h);
+        self.points_hit_buf   = Self::make_points_buf(device, ss_w, ss_h);
 
         self.cached_sim_bg = Self::make_sim_bg(
             device, &self.sim_bind_layout,
             &self.sim_state_buf, &self.accum_buf, &self.max_density_buf, &self.sim_params_buf,
+            &self.points_depth_buf, &self.points_hit_buf, &self.points_light_depth_buf,
         );
         self.cached_de_h_bg = Self::make_de_h_bg(
             device, &self.de_h_bind_layout, &self.accum_buf, &self.composite_params_buf,
@@ -889,6 +963,8 @@ impl Histogram {
         device: &wgpu::Device, layout: &wgpu::BindGroupLayout,
         state_buf: &wgpu::Buffer, accum_buf: &wgpu::Buffer,
         max_density_buf: &wgpu::Buffer, params_buf: &wgpu::Buffer,
+        points_depth_buf: &wgpu::Buffer, points_hit_buf: &wgpu::Buffer,
+        points_light_depth_buf: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("sim_bg"), layout,
@@ -897,7 +973,24 @@ impl Histogram {
                 wgpu::BindGroupEntry { binding: 1, resource: accum_buf.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 2, resource: max_density_buf.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 3, resource: params_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 4, resource: points_depth_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 5, resource: points_hit_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 6, resource: points_light_depth_buf.as_entire_binding() },
             ],
+        })
+    }
+
+    /// A square (or width×height) atomic<u32> storage buffer, zero-initialized
+    /// (the default), used for both Points mode depth/hit accumulation and
+    /// the light-space shadow buffer -- zero is already "empty" thanks to the
+    /// inverted depth encoding (see sim*.wgsl), so no special clear is needed
+    /// beyond the regular zero-init.
+    fn make_points_buf(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label:              Some("points_buf"),
+            size:               width as u64 * height as u64 * 4, // one u32 per texel
+            usage:              wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         })
     }
 
@@ -1088,7 +1181,11 @@ impl Histogram {
     }
 
     /// Dispatch one GPU simulation step: advances all trajectories by
-    /// `SIM_STEPS_PER_DISPATCH` Euler steps and splats them into the histogram.
+    /// `SIM_STEPS_PER_DISPATCH` Euler steps and splats them into the histogram
+    /// (and, regardless of active render mode, into the Points mode
+    /// camera-space depth/hit buffers and the light-space shadow buffer --
+    /// harmless extra bandwidth when not in Points mode, kept correctly
+    /// populated for whenever the user switches into it).
     pub fn dispatch_sim(
         &self,
         queue:           &wgpu::Queue,
@@ -1096,6 +1193,8 @@ impl Histogram {
         view_proj:       Mat4,
         config:          &AttractorConfig,
         noise_magnitude: f32,
+        light_view_proj: Mat4,
+        points_radius:   u32,
     ) {
         let ss_w = self.width  * self.ss_scale;
         let ss_h = self.height * self.ss_scale;
@@ -1124,6 +1223,10 @@ impl Histogram {
             ss_height: ss_h,
             steps:     SIM_STEPS_PER_DISPATCH,
             num_traj:  SIM_NUM_TRAJECTORIES,
+            light_view_proj: light_view_proj.to_cols_array(),
+            points_radius,
+            light_buf_size: POINTS_LIGHT_BUF_SIZE,
+            _points_pad: [0; 2],
             p,
         }));
 
@@ -1140,10 +1243,20 @@ impl Histogram {
     pub fn clear(&mut self, encoder: &mut wgpu::CommandEncoder) {
         encoder.clear_buffer(&self.accum_buf, 0, None);
         encoder.clear_buffer(&self.max_density_buf, 0, None);
+        encoder.clear_buffer(&self.points_depth_buf, 0, None);
+        encoder.clear_buffer(&self.points_hit_buf, 0, None);
+        encoder.clear_buffer(&self.points_light_depth_buf, 0, None);
         self.last_max_density = INITIAL_MAX_DENSITY;
         self.last_max_speed   = 1;
         // Do NOT touch max_map_inflight / max_map_ready here.
     }
+
+    /// GPU buffers `PointsRenderer` reads from -- camera-space depth/hit
+    /// (re-bind whenever these are recreated, i.e. on resize/ss_scale
+    /// change) and the fixed-size light-space shadow buffer (never resized).
+    pub fn points_depth_buf(&self) -> &wgpu::Buffer { &self.points_depth_buf }
+    pub fn points_hit_buf(&self) -> &wgpu::Buffer { &self.points_hit_buf }
+    pub fn points_light_depth_buf(&self) -> &wgpu::Buffer { &self.points_light_depth_buf }
 
     /// Two-pass composite: horizontal DE blur then vertical DE blur + colorize.
     /// `render_mode` selects between monochrome and light-mode gradient compositing.
@@ -1182,6 +1295,8 @@ impl Histogram {
         let (pipeline, bind_group) = match render_mode {
             RenderMode::Monochrome => (&self.composite_pipeline,       &self.cached_composite_bg),
             RenderMode::Light      => (&self.composite_light_pipeline, &self.cached_composite_light_bg),
+            RenderMode::Solid      => unreachable!("Solid mode never reaches Histogram::composite()"),
+            RenderMode::Points     => unreachable!("Points mode never reaches Histogram::composite()"),
         };
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1693,7 +1808,8 @@ fn make_lorenz_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             rng_f32(&mut rng) * 50.0 - 25.0,
             rng_f32(&mut rng) * 50.0,
         );
-        for _ in 0..1_000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = (
                 x + a * dt * (y - x),
                 y + dt * (b * x - y - z * x),
@@ -1746,7 +1862,8 @@ fn make_lorenz84_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
             rng_f32(&mut rng) * 6.0 - 3.0,
             rng_f32(&mut rng) * 6.0 - 3.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (-a * x - y * y - z * z + a * f),
                 y + dt * (-y + x * y - b * x * z + g),
@@ -1804,7 +1921,8 @@ fn make_rossler_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             rng_f32(&mut rng) * 22.0 - 11.0,
             rng_f32(&mut rng) * 22.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = (
                 x + dt * (-y - z),
                 y + dt * (x + a * y),
@@ -1858,7 +1976,8 @@ fn make_thomas_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             rng_f32(&mut rng) * 9.0 - 4.5,
             rng_f32(&mut rng) * 9.0 - 4.5,
         );
-        for _ in 0..500 {
+        for _ in 0..750 {
+
             let (nx, ny, nz) = (
                 x + dt * (-b * x + y.sin()),
                 y + dt * (-b * y + z.sin()),
@@ -2052,7 +2171,8 @@ fn make_genesio_tesi_states(num: u32, params: &[f32], extra_steps: u64, rng_seed
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = (
                 x + dt * y,
                 y + dt * z,
@@ -2102,7 +2222,8 @@ fn make_arneodo_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2200 {
+        for _ in 0..3_300 {
+
             let (nx, ny, nz) = (
                 x + dt * y,
                 y + dt * z,
@@ -2152,7 +2273,8 @@ fn make_chen_celikovsky_states(num: u32, params: &[f32], extra_steps: u64, rng_s
             1.0 + rng_f32(&mut rng) * 6.0 - 3.0,
             1.0 + rng_f32(&mut rng) * 6.0 - 3.0,
         );
-        for _ in 0..10000 {
+        for _ in 0..15_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (a*(y-x)),
                 y + dt * (-(x*z) + c*y),
@@ -2201,7 +2323,8 @@ fn make_shimizu_morioka_states(num: u32, params: &[f32], extra_steps: u64, rng_s
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = (
                 x + dt * y,
                 y + dt * ((1.0-z)*x - a*y),
@@ -2263,7 +2386,8 @@ fn make_three_cells_cnn_states(num: u32, params: &[f32], extra_steps: u64, rng_s
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2900 {
+        for _ in 0..4_350 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2300,7 +2424,8 @@ fn make_rucklidge_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (-k*x + a*y - y*z),
                 y + dt * x,
@@ -2350,7 +2475,8 @@ fn make_rayleigh_benard_states(num: u32, params: &[f32], extra_steps: u64, rng_s
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..500 {
+        for _ in 0..750 {
+
             let (nx, ny, nz) = (
                 x + dt * (-a*x + a*y),
                 y + dt * (r*x - y - x*z),
@@ -2399,7 +2525,8 @@ fn make_burke_shaw_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (-s*(x+y)),
                 y + dt * (-y - s*x*z),
@@ -2448,7 +2575,8 @@ fn make_sakarya_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             -1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
             1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (-x + y + y*z),
                 y + dt * (-x - y + a*x*z),
@@ -2512,7 +2640,8 @@ fn make_strizhak_kawczynski_states(num: u32, params: &[f32], extra_steps: u64, r
             rng_f32(&mut rng) * 10.0 - 5.0,
             rng_f32(&mut rng) * 10.0 - 5.0,
         );
-        for _ in 0..500 {
+        for _ in 0..750 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2549,7 +2678,8 @@ fn make_bouali_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             0.1 + rng_f32(&mut rng) * 3.0 - 1.5,
             0.1 + rng_f32(&mut rng) * 3.0 - 1.5,
         );
-        for _ in 0..3300 {
+        for _ in 0..4_950 {
+
             let (nx, ny, nz) = (
                 x + dt * (x*(4.0-y) + a*z),
                 y + dt * (-y*(1.0-x*x)),
@@ -2597,7 +2727,8 @@ fn make_halvorsen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = (
                 x + dt * (-a*x - 4.0*y - 4.0*z - y*y),
                 y + dt * (-a*y - 4.0*z - 4.0*x - z*z),
@@ -2658,7 +2789,8 @@ fn make_aizawa_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2707,7 +2839,8 @@ fn make_dequan_li_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u
             rng_f32(&mut rng) * 1.0 - 0.5,
             -0.160 + (rng_f32(&mut rng) * 1.0 - 0.5),
         );
-        for _ in 0..50_000 {
+        for _ in 0..75_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2754,7 +2887,8 @@ fn make_hadley_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2790,7 +2924,8 @@ fn make_nose_hoover_states(num: u32, params: &[f32], extra_steps: u64, rng_seed:
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..2200 {
+        for _ in 0..3_300 {
+
             let (nx, ny, nz) = (
                 x + dt * y,
                 y + dt * (-x + y*z),
@@ -2847,7 +2982,8 @@ fn make_newton_leipnik_states(num: u32, params: &[f32], extra_steps: u64, rng_se
             rng_f32(&mut rng) * 1.0 - 0.5,
             -0.160 + (rng_f32(&mut rng) * 1.0 - 0.5),
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -2885,7 +3021,8 @@ fn make_finance_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..700 {
+        for _ in 0..1_050 {
+
             let (nx, ny, nz) = (
                 x + dt * ((1.0/b - a)*x + z + x*y),
                 y + dt * (-b*y - x*x),
@@ -2935,7 +3072,8 @@ fn make_chen_lee_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
             rng_f32(&mut rng) * 4.0 - 2.0,
             4.50 + rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..5000 {
+        for _ in 0..7_500 {
+
             let (nx, ny, nz) = (
                 x + dt * (a*x - y*z),
                 y + dt * (b*y + x*z),
@@ -2987,7 +3125,8 @@ fn make_sprott_linz_b_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 4.0 - 2.0,
             1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3026,7 +3165,8 @@ fn make_sprott_linz_c_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 4.0 - 2.0,
             1.0 + rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3066,7 +3206,8 @@ fn make_sprott_linz_d_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3106,7 +3247,8 @@ fn make_sprott_linz_e_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3146,7 +3288,8 @@ fn make_sprott_linz_f_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3186,7 +3329,8 @@ fn make_sprott_linz_g_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3226,7 +3370,8 @@ fn make_sprott_linz_h_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 4.0 - 2.0,
             rng_f32(&mut rng) * 4.0 - 2.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3266,7 +3411,8 @@ fn make_sprott_linz_i_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3306,7 +3452,8 @@ fn make_sprott_linz_j_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..3300 {
+        for _ in 0..4_950 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3346,7 +3493,8 @@ fn make_sprott_linz_k_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3387,7 +3535,8 @@ fn make_sprott_linz_l_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3427,7 +3576,8 @@ fn make_sprott_linz_m_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3467,7 +3617,8 @@ fn make_sprott_linz_n_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3507,7 +3658,8 @@ fn make_sprott_linz_o_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2200 {
+        for _ in 0..3_300 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3547,7 +3699,8 @@ fn make_sprott_linz_p_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3588,7 +3741,8 @@ fn make_sprott_linz_q_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2500 {
+        for _ in 0..3_750 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3629,7 +3783,8 @@ fn make_sprott_linz_r_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3669,7 +3824,8 @@ fn make_sprott_linz_s_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2900 {
+        for _ in 0..4_350 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3828,7 +3984,8 @@ fn make_chaotic_flow_states(num: u32, params: &[f32], extra_steps: u64, rng_seed
             rng_f32(&mut rng) * 2.0 - 1.0,
             rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..1000 {
+        for _ in 0..1_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() {
                 (x, y, z) = (nx, ny, nz);
@@ -3919,7 +4076,8 @@ fn make_act_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) ->
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -3961,7 +4119,8 @@ fn make_anishchenko_astakhov_states(num: u32, params: &[f32], extra_steps: u64, 
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4005,7 +4164,8 @@ fn make_bouali_iii_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4050,7 +4210,8 @@ fn make_chua_cubic_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4135,7 +4296,8 @@ fn make_dadras_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32)
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4178,7 +4340,8 @@ fn make_elhadj_sprott_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             0.2 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4222,7 +4385,8 @@ fn make_four_wing_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..4000 {
+        for _ in 0..6_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4268,7 +4432,8 @@ fn make_four_wing2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4309,7 +4474,8 @@ fn make_four_wing3_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: 
             -2.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4356,7 +4522,8 @@ fn make_liu_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
             3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             5.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..3000 {
+        for _ in 0..4_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4399,7 +4566,8 @@ fn make_lorenz_mod1_states(num: u32, params: &[f32], extra_steps: u64, rng_seed:
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2500 {
+        for _ in 0..3_750 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4442,7 +4610,8 @@ fn make_lorenz_mod2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed:
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..20000 {
+        for _ in 0..30_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4485,7 +4654,8 @@ fn make_lue_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
             0.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             2.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4537,7 +4707,8 @@ fn make_multi_chua_ii_states(num: u32, params: &[f32], extra_steps: u64, rng_see
             -0.2 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.3 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4582,7 +4753,8 @@ fn make_qi_3d_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32) 
             -4.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..20000 {
+        for _ in 0..30_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4624,7 +4796,8 @@ fn make_qi_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             -4.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             3.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..20000 {
+        for _ in 0..30_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4669,7 +4842,8 @@ fn make_robinson_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u3
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
             0.10 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4714,7 +4888,8 @@ fn make_tsucs_1_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             -0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..5000 {
+        for _ in 0..7_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4759,7 +4934,8 @@ fn make_tsucs_2_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u32
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             -0.1 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..5000 {
+        for _ in 0..7_500 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }
@@ -4895,7 +5071,8 @@ fn make_zhou_chen_states(num: u32, params: &[f32], extra_steps: u64, rng_seed: u
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
             1.0 + rng_f32(&mut rng) * 2.0 - 1.0,
         );
-        for _ in 0..2000 {
+        for _ in 0..3_000 {
+
             let (nx, ny, nz) = step(x, y, z);
             if nx.is_finite() && ny.is_finite() && nz.is_finite() { (x, y, z) = (nx, ny, nz); }
         }

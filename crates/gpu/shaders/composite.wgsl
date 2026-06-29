@@ -50,23 +50,43 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertOut {
     return out;
 }
 
+// AA reconstruction kernel -- see de_h.wgsl's block_density for the full
+// rationale. Must match de_h.wgsl/composite_light.wgsl so the sigma estimate
+// this feeds is consistent across passes.
+const AA_SIGMA_SCALE: f32 = 0.5; // sigma, in supersample-texel units, relative to ss_scale
+
 fn block_density(dpx: i32, dpy: i32) -> f32 {
     if dpx < 0 || dpy < 0 || u32(dpx) >= params.width || u32(dpy) >= params.height {
         return 0.0;
     }
-    let ssx = u32(dpx) * params.ss_scale;
-    let ssy = u32(dpy) * params.ss_scale;
-    // Accumulate as f32 to avoid u32 overflow: at 4× SS, 16 values each up to
-    // ~2 B sum to ~32 B which wraps u32.  f32 handles up to 3.4e38 with
-    // precision loss of ~1 part in 8M at these magnitudes — negligible for rendering.
-    var total = 0.0f;
-    for (var dy = 0u; dy < params.ss_scale; dy++) {
-        for (var dx = 0u; dx < params.ss_scale; dx++) {
-            total += f32(accum[((ssy + dy) * params.ss_width + ssx + dx) * 2u]);
+    let ss = f32(params.ss_scale);
+    let cx = (f32(dpx) + 0.5) * ss;
+    let cy = (f32(dpy) + 0.5) * ss;
+    let sigma = max(ss * AA_SIGMA_SCALE, 0.6);
+    let inv2s2 = 0.5 / (sigma * sigma);
+    let radius = i32(ceil(sigma * 1.5));
+    let icx = i32(floor(cx));
+    let icy = i32(floor(cy));
+
+    // Accumulate as f32 to avoid u32 overflow: at 4× SS, values each up to
+    // ~2 B can sum past u32 range. f32 handles up to 3.4e38 with precision
+    // loss of ~1 part in 8M at these magnitudes — negligible for rendering.
+    var weighted   = 0.0f;
+    var weight_sum = 0.0f;
+    for (var dy = -radius; dy <= radius; dy++) {
+        let sy = icy + dy;
+        if sy < 0 || u32(sy) >= params.ss_height { continue; }
+        let ddy = f32(sy) + 0.5 - cy;
+        for (var dx = -radius; dx <= radius; dx++) {
+            let sx = icx + dx;
+            if sx < 0 || u32(sx) >= params.ss_width { continue; }
+            let ddx = f32(sx) + 0.5 - cx;
+            let w = exp(-(ddx * ddx + ddy * ddy) * inv2s2);
+            weighted   += w * f32(accum[(u32(sy) * params.ss_width + u32(sx)) * 2u]);
+            weight_sum += w;
         }
     }
-    let ss = f32(params.ss_scale);
-    return total / WEIGHT_SCALE / (ss * ss);
+    return weighted / max(weight_sum, 1e-6) / WEIGHT_SCALE;
 }
 
 @fragment

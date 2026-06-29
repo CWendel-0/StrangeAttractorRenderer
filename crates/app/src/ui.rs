@@ -7,10 +7,54 @@ fn sprott_num_terms(order: usize) -> usize {
     (order + 1) * (order + 2) * (order + 3) / 6
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SolidShadingModel {
+    BlinnPhong,
+    CookTorrance,
+    OrenNayar,
+    AnisotropicGgx,
+    Toon,
+    Subsurface,
+}
+
+impl SolidShadingModel {
+    pub const ALL: &'static [SolidShadingModel] = &[
+        SolidShadingModel::BlinnPhong,
+        SolidShadingModel::CookTorrance,
+        SolidShadingModel::OrenNayar,
+        SolidShadingModel::AnisotropicGgx,
+        SolidShadingModel::Toon,
+        SolidShadingModel::Subsurface,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SolidShadingModel::BlinnPhong     => "Blinn-Phong",
+            SolidShadingModel::CookTorrance   => "Cook-Torrance (PBR)",
+            SolidShadingModel::OrenNayar      => "Oren-Nayar (matte)",
+            SolidShadingModel::AnisotropicGgx => "Anisotropic GGX (brushed)",
+            SolidShadingModel::Toon           => "Toon / cel",
+            SolidShadingModel::Subsurface     => "Subsurface (fake)",
+        }
+    }
+
+    pub fn as_u32(self) -> u32 {
+        match self {
+            SolidShadingModel::BlinnPhong     => 0,
+            SolidShadingModel::CookTorrance   => 1,
+            SolidShadingModel::OrenNayar      => 2,
+            SolidShadingModel::AnisotropicGgx => 3,
+            SolidShadingModel::Toon           => 4,
+            SolidShadingModel::Subsurface     => 5,
+        }
+    }
+}
+
 use crate::colorset::ColorSet;
 use crate::gradient::{Gradient, gradient_editor};
 use crate::movie::{MovieStatus, OutputKind};
 use crate::velocity_slider::velocity_slider;
+
 
 pub struct UiState {
     pub attractor:  AttractorConfig,
@@ -27,6 +71,7 @@ pub struct UiState {
     pub save_requested:   bool,
     pub save_state_requested: bool,
     pub load_state_requested: bool,
+    pub export_mesh_requested: bool,
     pub color_space_srgb: bool,
 
     pub canvas_width:  u32,
@@ -43,6 +88,74 @@ pub struct UiState {
 
     // ---- render mode ----
     pub render_mode: RenderMode,
+
+    // ---- Solid mode ----
+    pub solid_point_count: u32,
+    pub solid_tube_radius: f32,
+    pub solid_sides:       u32,
+    pub solid_color:       egui::Color32,
+    /// Set by Solid-mode sliders or `SceneState::apply`, persists across frames
+    /// (like `gradient_a_dirty`) until main.rs consumes it into `App::mesh_dirty`
+    /// and clears it.
+    pub mesh_dirty_solid:  bool,
+    /// Set by main.rs after each mesh rebuild, for the "N points, M triangles" readout.
+    pub solid_mesh_stats:  Option<(usize, usize)>,
+    /// Set by main.rs when the active attractor's trajectory is detected as
+    /// (near-)planar -- a tube mesh around it would just be a flat ribbon,
+    /// so Solid mode refuses to build/render one and shows this instead.
+    pub solid_planar_blocked: bool,
+
+    // Material / lighting controls.
+    pub solid_ambient:            f32,
+    pub solid_alpha:               f32,
+    pub solid_light_azimuth_deg:   f32,
+    pub solid_light_elevation_deg: f32,
+    pub solid_specular_color:      egui::Color32,
+    pub solid_shininess:           f32,
+
+    /// Which BRDF fs_main uses. Blinn-Phong is the original stylized model;
+    /// Cook-Torrance is a physically-based metal/dielectric (GGX) model where
+    /// `solid_metalness` and `solid_color` (as albedo / F0 tint for metals)
+    /// matter, and `solid_specular_color`/`solid_shininess` are unused.
+    pub solid_shading_model: SolidShadingModel,
+    /// 0 = dielectric (uses `solid_reflectivity` as F0), 1 = metal (uses
+    /// `solid_color` as F0, no diffuse term). Cook-Torrance/Anisotropic GGX.
+    pub solid_metalness: f32,
+    /// -1..1, stretches the specular highlight along (positive) or across
+    /// (negative) the tube's length. Anisotropic GGX only.
+    pub solid_anisotropy: f32,
+    /// Number of discrete lighting bands. Toon only.
+    pub solid_toon_bands: f32,
+    /// 0..1, strength of the rim light. Toon only.
+    pub solid_toon_rim: f32,
+    /// 0..1, strength of the fake back-lit glow. Subsurface only.
+    pub solid_sss_strength: f32,
+    /// Controls how tight the back-lit glow is (higher = narrower). Subsurface only.
+    pub solid_sss_power: f32,
+
+    // Roughness alone carries the "frosted glass" look: broadens/dims the
+    // specular highlight and dampens reflectivity, rather than bump-mapping
+    // geometric detail (tried and abandoned -- see git history).
+    pub solid_roughness: f32,
+
+    // Fake reflection/refraction against a two-tone procedural sky (no real
+    // environment to reflect, so this is a stylized Fresnel blend rather
+    // than anything ray-traced).
+    pub solid_reflectivity: f32,
+    pub solid_ior:          f32,
+    pub solid_refraction:   f32,
+    pub solid_sky_top:      egui::Color32,
+    pub solid_sky_bottom:   egui::Color32,
+
+    // ---- Points mode ----
+    // Geometry source is a screen-space depth/hit accumulation (bounded by
+    // canvas resolution, not point count -- see crate::points), not a CPU
+    // mesh -- but material/lighting/reflection controls above (solid_color,
+    // solid_shading_model, solid_ambient, ...) are shared verbatim with
+    // Solid mode (see `material_lighting_ui`).
+    /// Camera-space splat footprint radius in supersampled pixels (0 = a
+    /// single pixel per point). Real perf cost: footprint is `(2r+1)^2`.
+    pub points_radius: u32,
 
     // ---- Light mode gradients + blend ----
     pub gradient_a:       Gradient,
@@ -100,6 +213,7 @@ impl UiState {
             save_requested:   false,
             save_state_requested: false,
             load_state_requested: false,
+            export_mesh_requested: false,
             color_space_srgb: true,
             canvas_width,
             canvas_height,
@@ -110,6 +224,33 @@ impl UiState {
             viewport_scroll:      0.0,
             bg_color: egui::Color32::BLACK,
             render_mode: RenderMode::Light,
+            solid_point_count: 100_000,
+            solid_tube_radius: 0.05,
+            solid_sides:       8,
+            solid_color:       egui::Color32::from_rgb(220, 220, 225),
+            mesh_dirty_solid:  false,
+            solid_mesh_stats:  None,
+            solid_planar_blocked: false,
+            solid_ambient:              0.25,
+            solid_alpha:                1.0,
+            solid_light_azimuth_deg:    35.0,
+            solid_light_elevation_deg:  55.0,
+            solid_specular_color:       egui::Color32::from_rgb(255, 255, 255),
+            solid_shininess:            24.0,
+            solid_shading_model:  SolidShadingModel::BlinnPhong,
+            solid_metalness:      0.0,
+            solid_anisotropy:     0.0,
+            solid_toon_bands:     4.0,
+            solid_toon_rim:       0.3,
+            solid_sss_strength:   0.5,
+            solid_sss_power:      2.0,
+            solid_roughness:      0.3,
+            solid_reflectivity:   0.04,
+            solid_ior:            1.5,
+            solid_refraction:     0.0,
+            solid_sky_top:        egui::Color32::from_rgb(140, 180, 230),
+            solid_sky_bottom:     egui::Color32::from_rgb(40, 40, 50),
+            points_radius: 0,
             gradient_a:       Gradient::density_default(),
             gradient_b:       Gradient::speed_default(),
             gradient_a_dirty: true,
@@ -152,6 +293,7 @@ impl UiState {
         self.save_requested   = false;
         self.save_state_requested = false;
         self.load_state_requested = false;
+        self.export_mesh_requested = false;
         self.movie_render_requested = false;
         self.movie_cancel_requested = false;
         self.movie_close_requested  = false;
@@ -177,6 +319,13 @@ impl UiState {
                         ui.close_menu();
                     }
                     ui.separator();
+                    ui.add_enabled_ui(self.render_mode == RenderMode::Solid, |ui| {
+                        if ui.button("Export Mesh (OBJ)…").clicked() {
+                            self.export_mesh_requested = true;
+                            ui.close_menu();
+                        }
+                    });
+                    ui.separator();
                     if ui.button("Render Movie…").clicked() {
                         self.movie_dialog_open = true;
                         ui.close_menu();
@@ -186,10 +335,17 @@ impl UiState {
                 let mut apply_color_set: Option<ColorSet> = None;
                 let mut open_save_dialog = false;
                 let mut open_manage_dialog = false;
+                let render_mode_suffix = |mode: RenderMode| match mode {
+                    RenderMode::Monochrome => " (Monochrome)",
+                    RenderMode::Light      => " (Colorful)",
+                    RenderMode::Solid      => " (Solid)",
+                    RenderMode::Points     => " (Points)",
+                };
                 ui.menu_button("Colors", |ui| {
                     ui.label("Built-in");
                     for set in &self.color_sets_built_in {
-                        if ui.button(&set.name).clicked() {
+                        let label = format!("{}{}", set.name, render_mode_suffix(set.render_mode));
+                        if ui.button(label).clicked() {
                             apply_color_set = Some(set.clone());
                             ui.close_menu();
                         }
@@ -198,7 +354,8 @@ impl UiState {
                         ui.separator();
                         ui.label("Custom");
                         for set in &self.color_sets_custom {
-                            if ui.button(&set.name).clicked() {
+                            let label = format!("{}{}", set.name, render_mode_suffix(set.render_mode));
+                            if ui.button(label).clicked() {
                                 apply_color_set = Some(set.clone());
                                 ui.close_menu();
                             }
@@ -413,6 +570,8 @@ impl UiState {
                     let was = self.render_mode;
                     ui.selectable_value(&mut self.render_mode, RenderMode::Monochrome, "Monochrome");
                     ui.selectable_value(&mut self.render_mode, RenderMode::Light, "Colorful");
+                    ui.selectable_value(&mut self.render_mode, RenderMode::Solid, "Solid");
+                    ui.selectable_value(&mut self.render_mode, RenderMode::Points, "Points");
                     if self.render_mode != was {
                         self.dirty = true;
                     }
@@ -453,37 +612,102 @@ impl UiState {
                 });
                 ui.checkbox(&mut self.show_metrics, "Show λ₁ / D_KY");
 
-                ui.separator();
-                ui.label("Anti-aliasing (supersampling)");
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.ss_scale, 1u32, "1×");
-                    ui.selectable_value(&mut self.ss_scale, 2u32, "2×");
-                    ui.selectable_value(&mut self.ss_scale, 4u32, "4×");
-                });
+                if self.render_mode != RenderMode::Solid {
+                    ui.separator();
+                    ui.label("Anti-aliasing (supersampling)");
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut self.ss_scale, 1u32, "1×");
+                        ui.selectable_value(&mut self.ss_scale, 2u32, "2×");
+                        ui.selectable_value(&mut self.ss_scale, 4u32, "4×");
+                    });
+                }
 
-                ui.separator();
-                ui.label("Blur (Density Estimation)");
-                ui.add(
-                    egui::Slider::new(&mut self.max_sigma, 0.0..=5.0)
-                        .text("Max blur σ")
-                        .clamping(egui::SliderClamping::Always),
-                );
-                ui.add(
-                    egui::Slider::new(&mut self.min_sigma, 0.0..=2.0)
-                        .text("Min blur σ")
-                        .clamping(egui::SliderClamping::Always),
-                );
-                self.min_sigma = self.min_sigma.min(self.max_sigma);
-                ui.add(
-                    egui::Slider::new(&mut self.alpha_power, 1.0..=10.0)
-                        .text("Alpha power")
-                        .clamping(egui::SliderClamping::Always),
-                );
-                ui.add(
-                    egui::Slider::new(&mut self.noise_magnitude, 0.0..=3.0)
-                        .text("Noise (px)")
-                        .clamping(egui::SliderClamping::Always),
-                );
+                if self.render_mode != RenderMode::Solid && self.render_mode != RenderMode::Points {
+                    ui.separator();
+                    ui.label("Blur (Density Estimation)");
+                    ui.add(
+                        egui::Slider::new(&mut self.max_sigma, 0.0..=5.0)
+                            .text("Max blur σ")
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut self.min_sigma, 0.0..=2.0)
+                            .text("Min blur σ")
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                    self.min_sigma = self.min_sigma.min(self.max_sigma);
+                    ui.add(
+                        egui::Slider::new(&mut self.alpha_power, 1.0..=10.0)
+                            .text("Alpha power")
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                }
+                if self.render_mode != RenderMode::Solid {
+                    ui.add(
+                        egui::Slider::new(&mut self.noise_magnitude, 0.0..=3.0)
+                            .text("Noise (px)")
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                }
+
+                if self.render_mode == RenderMode::Solid {
+                    if self.solid_planar_blocked {
+                        ui.separator();
+                        ui.colored_label(
+                            egui::Color32::from_rgb(230, 180, 80),
+                            "This attractor's trajectory is (near-)planar — \
+                             a tube mesh around it would just be a flat ribbon, \
+                             so Solid mode is unavailable for it. Pick a \
+                             genuinely 3-D attractor, or use Monochrome/Colorful.",
+                        );
+                    }
+
+                    ui.separator();
+                    ui.label("Solid mesh");
+                    if ui.add(
+                        egui::Slider::new(&mut self.solid_point_count, 10_000..=500_000)
+                            .text("Trajectory points")
+                            .logarithmic(true)
+                            .clamping(egui::SliderClamping::Always),
+                    ).changed() {
+                        self.mesh_dirty_solid = true;
+                    }
+                    if ui.add(
+                        egui::Slider::new(&mut self.solid_tube_radius, 0.001..=2.0)
+                            .text("Tube radius")
+                            .logarithmic(true)
+                            .clamping(egui::SliderClamping::Always),
+                    ).changed() {
+                        self.mesh_dirty_solid = true;
+                    }
+                    let mut sides = self.solid_sides as i32;
+                    if ui.add(egui::DragValue::new(&mut sides).range(4..=16).speed(1.0).prefix("Sides: ")).changed() {
+                        self.solid_sides = sides as u32;
+                        self.mesh_dirty_solid = true;
+                    }
+                    if let Some((points, tris)) = self.solid_mesh_stats {
+                        ui.label(format!("{} points, {} triangles", points, tris));
+                    }
+
+                    self.material_lighting_ui(ui);
+                }
+
+                if self.render_mode == RenderMode::Points {
+                    ui.separator();
+                    ui.label("Points mesh");
+                    let mut radius = self.points_radius as i32;
+                    if ui.add(
+                        egui::Slider::new(&mut radius, 0..=3)
+                            .text("Point size")
+                            .clamping(egui::SliderClamping::Always),
+                    ).changed() {
+                        self.points_radius = radius as u32;
+                    }
+                    ui.label("Footprint per point is (2*size+1)² screen pixels -- real \
+                              perf cost, raise gradually and watch frame time.");
+
+                    self.material_lighting_ui(ui);
+                }
 
                 if self.render_mode == RenderMode::Light {
                     ui.separator();
@@ -634,7 +858,7 @@ impl UiState {
                                     );
                                 }
                             }
-                            // iter count always shown
+                            // iter count (Monochrome/Light) or mesh stats (Solid)
                             {
                                 let w = egui::Color32::WHITE;
                                 let m = |s: &str| egui::RichText::new(s).monospace().color(w);
@@ -642,15 +866,100 @@ impl UiState {
                                     .num_columns(3)
                                     .spacing([4.0, 2.0])
                                     .show(ui, |ui| {
-                                        ui.label(m("iter"));
-                                        ui.label(m("="));
-                                        ui.label(m(&fmt_iters(self.iter_count)));
-                                        ui.end_row();
+                                        if self.render_mode == RenderMode::Solid {
+                                            if let Some((points, tris)) = self.solid_mesh_stats {
+                                                ui.label(m("points"));
+                                                ui.label(m("="));
+                                                ui.label(m(&fmt_iters(points as u64)));
+                                                ui.end_row();
+                                                ui.label(m("tris"));
+                                                ui.label(m("="));
+                                                ui.label(m(&fmt_iters(tris as u64)));
+                                                ui.end_row();
+                                            }
+                                        } else {
+                                            ui.label(m("iter"));
+                                            ui.label(m("="));
+                                            ui.label(m(&fmt_iters(self.iter_count)));
+                                            ui.end_row();
+                                        }
                                     });
                             }
                         });
                 });
         }
+    }
+
+    /// Material/Lighting/Reflection-refraction controls, shared verbatim
+    /// between Solid (tube mesh) and Points (sphere impostors) -- both
+    /// shaders read the exact same `solid_*` fields, see shading_common.wgsl.
+    fn material_lighting_ui(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.label("Material");
+        ui.horizontal(|ui| {
+            ui.label("Shading model");
+            egui::ComboBox::from_id_salt("solid_shading_model")
+                .selected_text(self.solid_shading_model.label())
+                .show_ui(ui, |ui| {
+                    for &model in SolidShadingModel::ALL {
+                        ui.selectable_value(&mut self.solid_shading_model, model, model.label());
+                    }
+                });
+        });
+        let model = self.solid_shading_model;
+        let uses_metalness = matches!(model, SolidShadingModel::CookTorrance | SolidShadingModel::AnisotropicGgx);
+        let uses_specular  = matches!(model, SolidShadingModel::BlinnPhong | SolidShadingModel::OrenNayar);
+        ui.horizontal(|ui| {
+            ui.label(if uses_metalness { "Color / F0 (metal)" } else { "Color" });
+            ui.color_edit_button_srgba(&mut self.solid_color);
+        });
+        ui.add(egui::Slider::new(&mut self.solid_alpha, 0.05..=1.0).text("Opacity"));
+        if uses_metalness {
+            ui.add(egui::Slider::new(&mut self.solid_metalness, 0.0..=1.0).text("Metalness"));
+        }
+        if model == SolidShadingModel::AnisotropicGgx {
+            ui.add(egui::Slider::new(&mut self.solid_anisotropy, -1.0..=1.0).text("Anisotropy"));
+        }
+        if uses_specular {
+            ui.horizontal(|ui| {
+                ui.label("Specular");
+                ui.color_edit_button_srgba(&mut self.solid_specular_color);
+            });
+            ui.add(egui::Slider::new(&mut self.solid_shininess, 1.0..=128.0).logarithmic(true).text("Shininess"));
+        }
+        if model == SolidShadingModel::Toon {
+            ui.horizontal(|ui| {
+                ui.label("Rim color");
+                ui.color_edit_button_srgba(&mut self.solid_specular_color);
+            });
+            ui.add(egui::Slider::new(&mut self.solid_toon_bands, 2.0..=8.0).step_by(1.0).text("Bands"));
+            ui.add(egui::Slider::new(&mut self.solid_toon_rim, 0.0..=1.0).text("Rim strength"));
+        }
+        if model == SolidShadingModel::Subsurface {
+            ui.add(egui::Slider::new(&mut self.solid_sss_strength, 0.0..=1.0).text("Translucency"));
+            ui.add(egui::Slider::new(&mut self.solid_sss_power, 1.0..=16.0).logarithmic(true).text("Glow tightness"));
+        }
+
+        ui.separator();
+        ui.label("Lighting");
+        ui.add(egui::Slider::new(&mut self.solid_ambient, 0.0..=1.0).text("Ambient"));
+        ui.add(egui::Slider::new(&mut self.solid_light_azimuth_deg, 0.0..=360.0).text("Light azimuth"));
+        ui.add(egui::Slider::new(&mut self.solid_light_elevation_deg, -89.0..=89.0).text("Light elevation"));
+
+        ui.add(egui::Slider::new(&mut self.solid_roughness, 0.0..=1.0).text("Roughness"));
+
+        ui.separator();
+        ui.label("Reflection / refraction");
+        ui.add(egui::Slider::new(&mut self.solid_reflectivity, 0.0..=1.0)
+            .text(if uses_metalness { "Reflectivity (dielectric F0)" } else { "Reflectivity" }));
+        ui.add(egui::Slider::new(&mut self.solid_ior, 1.0..=3.0).text("Index of refraction"));
+        ui.add(egui::Slider::new(&mut self.solid_refraction, 0.0..=1.0).text("Refraction"));
+        ui.horizontal(|ui| {
+            ui.label("Sky (up)");
+            ui.color_edit_button_srgba(&mut self.solid_sky_top);
+            ui.label("Sky (down)");
+            ui.color_edit_button_srgba(&mut self.solid_sky_bottom);
+        });
     }
 
     fn show_color_set_save_dialog(&mut self, ctx: &Context) {
@@ -707,7 +1016,13 @@ impl UiState {
                 }
                 for (i, set) in self.color_sets_custom.iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(&set.name);
+                        let mode_label = match set.render_mode {
+                            RenderMode::Monochrome => "Monochrome",
+                            RenderMode::Light      => "Colorful",
+                            RenderMode::Solid      => "Solid",
+                            RenderMode::Points     => "Points",
+                        };
+                        ui.label(format!("{} ({})", set.name, mode_label));
                         if ui.small_button("Delete").clicked() {
                             remove_idx = Some(i);
                         }

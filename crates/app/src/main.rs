@@ -1,6 +1,7 @@
 mod camera;
 mod colorset;
 mod gradient;
+mod mesh_export;
 mod movie;
 mod state;
 mod ui;
@@ -11,6 +12,7 @@ use state::SceneState;
 use ui::UiState;
 
 use gpu::histogram::{CompositeParams, Histogram};
+use gpu::RenderMode;
 use sim::{AttractorConfig, AttractorType, LyapunovWorker, SearchWorker};
 
 use glam::Vec2;
@@ -59,6 +61,8 @@ struct GpuState {
     queue:         Arc<wgpu::Queue>,
     config:        wgpu::SurfaceConfiguration,
     histogram:     Histogram,
+    solid:         gpu::SolidRenderer,
+    points:        gpu::PointsRenderer,
     egui_renderer: egui_wgpu::Renderer,
 }
 
@@ -122,13 +126,18 @@ impl GpuState {
         let histogram = Histogram::new(
             &device, &queue, canvas_w, canvas_h, initial_config,
         );
+        let solid = gpu::SolidRenderer::new(&device, canvas_w, canvas_h);
+        let points = gpu::PointsRenderer::new(
+            &device, canvas_w, canvas_h, histogram.ss_scale,
+            histogram.points_depth_buf(), histogram.points_hit_buf(), histogram.points_light_depth_buf(),
+        );
 
         let egui_renderer = egui_wgpu::Renderer::new(&device, format, None, 1, false);
 
         let device = Arc::new(device);
         let queue  = Arc::new(queue);
 
-        GpuState { surface, device, queue, config, histogram, egui_renderer }
+        GpuState { surface, device, queue, config, histogram, solid, points, egui_renderer }
     }
 
     fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -173,6 +182,16 @@ struct App {
     canvas_tex_id_raw:  Option<egui::TextureId>, // Rgba8UnormSrgb view → egui shows linear
 
     movie_job: Option<movie::MovieJob>,
+
+    // Solid mode: CPU-built tube mesh, rebuilt only when the attractor or
+    // Solid-specific sliders change (mesh_dirty), never per-frame.
+    mesh_dirty: bool,
+    solid_mesh: Option<sim::TubeMesh>,
+
+    // Points mode: cached CPU bounds estimate for the shadow frustum, since
+    // there's no CPU mesh to read bb_min/bb_max from like Solid has.
+    // Refreshed on attractor type/param change only, not every frame.
+    points_bounds: (glam::Vec3, glam::Vec3),
 }
 
 impl App {
@@ -198,6 +217,9 @@ impl App {
             canvas_tex_id:     None,
             canvas_tex_id_raw: None,
             movie_job: None,
+            mesh_dirty: true,
+            solid_mesh: None,
+            points_bounds: (glam::Vec3::ZERO, glam::Vec3::ZERO),
         }
     }
 }
@@ -376,6 +398,7 @@ impl App {
                     let aspect = cw as f32 / ch.max(1) as f32;
                     self.camera = ArcballCamera::fit_aabb(aspect, result.bb_min, result.bb_max);
                     self.pending_clear = true;
+                    self.mesh_dirty = true;
                     search_result_received = true;
                 }
                 self.search_worker = None;
@@ -447,6 +470,17 @@ impl App {
         if ui.dirty {
             gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
             self.pending_clear = true;
+            self.mesh_dirty = true;
+            // Points mode's shadow frustum needs a bounding box, but it has
+            // no CPU mesh to read one from (unlike Solid) -- reuse the same
+            // CPU bounds estimate Monochrome/Light's camera auto-fit already
+            // relies on. Refreshed on param change too, not just type change,
+            // since params can reshape the attractor without recentring it.
+            self.points_bounds = ui.attractor.estimate_bounds_cpu();
+        }
+        if ui.mesh_dirty_solid {
+            self.mesh_dirty = true;
+            ui.mesh_dirty_solid = false;
         }
 
         if ui.type_changed {
@@ -459,6 +493,7 @@ impl App {
             let aspect = cw as f32 / ch.max(1) as f32;
             let (bb_min, bb_max) = ui.attractor.estimate_bounds_cpu();
             self.camera = ArcballCamera::fit_aabb(aspect, bb_min, bb_max);
+            self.points_bounds = (bb_min, bb_max);
         }
 
         // ---- Lyapunov worker management ----
@@ -498,6 +533,14 @@ impl App {
                 interpolated.apply(ui, &mut self.camera);
                 gpu.histogram.reset_sim_states(&gpu.queue, &ui.attractor);
                 self.pending_clear = true;
+                // `apply()` only sets `ui.mesh_dirty_solid`, which normally
+                // doesn't become `self.mesh_dirty` until next tick (see the
+                // check above this block) -- too late for Solid mode, which
+                // captures the frame as soon as this same tick's render
+                // happens below. Setting it directly here keeps Solid movie
+                // frames at one mesh-rebuild-and-render per tick instead of
+                // silently capturing a stale mesh one tick early.
+                self.mesh_dirty = true;
                 job.mark_frame_started();
             }
         }
@@ -527,6 +570,10 @@ impl App {
         if ui.ss_scale != gpu.histogram.ss_scale {
             gpu.histogram.set_ss_scale(&gpu.device, ui.ss_scale);
             ui.ss_scale = gpu.histogram.ss_scale;
+            gpu.points.resize(
+                &gpu.device, gpu.histogram.width, gpu.histogram.height, gpu.histogram.ss_scale,
+                gpu.histogram.points_depth_buf(), gpu.histogram.points_hit_buf(), gpu.histogram.points_light_depth_buf(),
+            );
             self.pending_clear = true;
         }
 
@@ -534,6 +581,11 @@ impl App {
             let cw = ui.canvas_width.max(64);
             let ch = ui.canvas_height.max(64);
             gpu.histogram.resize(&gpu.device, cw, ch);
+            gpu.solid.resize(&gpu.device, cw, ch);
+            gpu.points.resize(
+                &gpu.device, cw, ch, gpu.histogram.ss_scale,
+                gpu.histogram.points_depth_buf(), gpu.histogram.points_hit_buf(), gpu.histogram.points_light_depth_buf(),
+            );
             if let Some(id) = self.canvas_tex_id {
                 gpu.egui_renderer.update_egui_texture_from_wgpu_texture(
                     &gpu.device,
@@ -555,6 +607,63 @@ impl App {
             ui.canvas_dirty = false;
         }
 
+        // ---- Solid mode: rebuild the CPU tube mesh only when something that
+        // affects its geometry changed (attractor type/params, point count,
+        // tube radius, sides) -- never per-frame, never on camera movement.
+        if ui.render_mode == RenderMode::Solid && self.mesh_dirty {
+            let centerline = sim::build_centerline_cpu(&ui.attractor, ui.solid_point_count as usize);
+
+            let mut bb_min = glam::Vec3::splat(f32::MAX);
+            let mut bb_max = glam::Vec3::splat(f32::MIN);
+            for &p in &centerline {
+                bb_min = bb_min.min(p);
+                bb_max = bb_max.max(p);
+            }
+            let extent = if bb_min.x <= bb_max.x { bb_max - bb_min } else { glam::Vec3::ZERO };
+
+            // A tube built around a (near-)planar trajectory -- e.g. the many
+            // 2-D maps that keep z fixed at 0 -- would just be a flat ribbon,
+            // not a 3-D object, so refuse rather than build one. Detected
+            // dynamically (smallest extent below 0.1% of the largest) rather
+            // than from a hardcoded type list, so it also catches any
+            // attractor whose *parameters* happen to flatten it.
+            let max_extent = extent.x.max(extent.y).max(extent.z);
+            let min_extent = extent.x.min(extent.y).min(extent.z);
+            let is_planar = centerline.len() < 2 || max_extent <= 0.0 || min_extent < max_extent * 1e-3;
+
+            if is_planar {
+                ui.solid_planar_blocked = true;
+                ui.solid_mesh_stats = None;
+                gpu.solid.clear_mesh();
+                self.solid_mesh = None;
+            } else {
+                ui.solid_planar_blocked = false;
+
+                if ui.type_changed || self.solid_mesh.is_none() {
+                    // Attractor scale varies hugely across types (Lorenz ~±30,
+                    // many maps ~±2); auto-derive a sensible default radius as
+                    // a small fraction of the bounding-box diagonal rather
+                    // than shipping one fixed absolute default. The slider
+                    // then takes over from here for manual tuning.
+                    let diag = (bb_max - bb_min).length();
+                    ui.solid_tube_radius = (diag * 0.005).max(1e-4);
+                }
+
+                let mesh = sim::build_tube_mesh(&centerline, ui.solid_tube_radius, ui.solid_sides);
+                ui.solid_mesh_stats = Some((mesh.vertices.len(), mesh.indices.len() / 3));
+                gpu.solid.upload_mesh(&gpu.device, &gpu.queue, &mesh);
+
+                if ui.type_changed || self.solid_mesh.is_none() {
+                    let cw = gpu.histogram.width;
+                    let ch = gpu.histogram.height;
+                    let aspect = cw as f32 / ch.max(1) as f32;
+                    self.camera = ArcballCamera::fit_aabb(aspect, mesh.bb_min, mesh.bb_max);
+                }
+                self.solid_mesh = Some(mesh);
+            }
+            self.mesh_dirty = false;
+        }
+
         gpu.histogram.poll_max_density(&gpu.device);
 
         // Periodic reseed: every ~30 s inject a new set of 8 192 uniformly-sampled
@@ -563,7 +672,7 @@ impl App {
         // distinct from the previous batch (512 × phase >> Lyapunov time for all
         // built-in attractors, giving statistically independent samples).
         const RESEED_INTERVAL: u32 = 200; // ~30 s at 60 fps
-        if self.movie_job.is_none() {
+        if self.movie_job.is_none() && ui.render_mode != RenderMode::Solid {
             self.frames_accumulated = if self.pending_clear { 0 } else { self.frames_accumulated + 1 };
             if self.frames_accumulated > 0 && self.frames_accumulated % RESEED_INTERVAL == 0 {
                 gpu.histogram.reseed_trajectories(&gpu.queue, &ui.attractor, self.reseed_count);
@@ -585,56 +694,240 @@ impl App {
             label: Some("frame"),
         });
 
-        if self.pending_clear {
-            gpu.histogram.clear(&mut encoder);
-            self.pending_clear = false;
-            ui.iter_count = 0;
-        }
+        let bg_color = {
+            let c = ui.bg_color;
+            wgpu::Color {
+                r: c.r() as f64 / 255.0,
+                g: c.g() as f64 / 255.0,
+                b: c.b() as f64 / 255.0,
+                a: 1.0,
+            }
+        };
 
-        let vp = self.camera.view_proj();
-        gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.attractor, ui.noise_magnitude);
-        ui.iter_count = ui.iter_count.saturating_add(
-            gpu::histogram::SIM_NUM_TRAJECTORIES as u64 * gpu::histogram::SIM_STEPS_PER_DISPATCH as u64
-        );
+        if ui.render_mode == RenderMode::Solid {
+            let vp = self.camera.view_proj();
+            let eye = self.camera.eye();
 
-        let cw = gpu.histogram.width;
-        let ch = gpu.histogram.height;
-        const WEIGHT_SCALE: f32 = 1024.0;
-        let ss = gpu.histogram.ss_scale;
-        let max_display = gpu.histogram.last_max_density as f32 / WEIGHT_SCALE;
-        let log_max = (max_display + 1.0).ln().max(1e-6);
-        gpu.histogram.composite(
-            &gpu.queue,
-            &mut encoder,
-            CompositeParams {
-                width:           cw,
-                height:          ch,
-                log_max_density: log_max,
-                brightness:      ui.brightness,
-                gamma:           ui.gamma.max(1e-4),
-                ss_width:        cw * ss,
-                ss_height:       ch * ss,
-                max_sigma:       ui.max_sigma,
-                min_sigma:       ui.min_sigma,
-                ss_scale:        ss,
-                blend_mode:      ui.blend_mode.as_u32(),
-                max_speed_enc:   gpu.histogram.last_max_speed,
-                alpha_power:     ui.alpha_power,
-            },
-            ui.render_mode,
-            {
-                let c = ui.bg_color;
-                wgpu::Color {
-                    r: c.r() as f64 / 255.0,
-                    g: c.g() as f64 / 255.0,
-                    b: c.b() as f64 / 255.0,
-                    a: 1.0,
+            let az = ui.solid_light_azimuth_deg.to_radians();
+            let el = ui.solid_light_elevation_deg.to_radians();
+            let light_dir = glam::Vec3::new(
+                el.cos() * az.cos(),
+                el.sin(),
+                el.cos() * az.sin(),
+            );
+
+            // Orthographic light view-proj, fit to the mesh's bounding sphere
+            // so the shadow map's resolution isn't wasted on empty space.
+            let light_view_proj = match &self.solid_mesh {
+                Some(mesh) => {
+                    let center = (mesh.bb_min + mesh.bb_max) * 0.5;
+                    let radius = (mesh.bb_max - mesh.bb_min).length() * 0.5;
+                    let radius = radius.max(1e-3);
+                    let light_eye = center + light_dir * (radius * 2.0);
+                    let up = if light_dir.y.abs() < 0.9 { glam::Vec3::Y } else { glam::Vec3::X };
+                    let view = glam::Mat4::look_at_rh(light_eye, center, up);
+                    let proj = glam::Mat4::orthographic_rh(
+                        -radius, radius, -radius, radius, 0.01, radius * 4.0,
+                    );
+                    proj * view
                 }
-            },
-        );
+                None => glam::Mat4::IDENTITY,
+            };
 
-        gpu.histogram.blit_to_canvas(&mut encoder);
-        gpu.histogram.encode_max_readback(&mut encoder);
+            let base = ui.solid_color;
+            let spec = ui.solid_specular_color;
+            let sky_top = ui.solid_sky_top;
+            let sky_bottom = ui.solid_sky_bottom;
+            gpu.solid.render(
+                &gpu.queue,
+                &mut encoder,
+                gpu.histogram.canvas_view(),
+                gpu::SolidParams {
+                    view_proj:  vp.to_cols_array(),
+                    light_view_proj: light_view_proj.to_cols_array(),
+                    camera_pos: [eye.x, eye.y, eye.z, 0.0],
+                    light_dir_ambient: [light_dir.x, light_dir.y, light_dir.z, ui.solid_ambient],
+                    base_color_alpha: [
+                        base.r() as f32 / 255.0,
+                        base.g() as f32 / 255.0,
+                        base.b() as f32 / 255.0,
+                        ui.solid_alpha,
+                    ],
+                    specular_shininess: [
+                        spec.r() as f32 / 255.0,
+                        spec.g() as f32 / 255.0,
+                        spec.b() as f32 / 255.0,
+                        ui.solid_shininess,
+                    ],
+                    material_extra: [
+                        ui.solid_roughness,
+                        ui.solid_metalness,
+                        ui.solid_shading_model.as_u32() as f32,
+                        ui.solid_anisotropy,
+                    ],
+                    reflect_refract: [
+                        ui.solid_reflectivity,
+                        ui.solid_ior,
+                        ui.solid_refraction,
+                        0.0,
+                    ],
+                    sky_top: [sky_top.r() as f32 / 255.0, sky_top.g() as f32 / 255.0, sky_top.b() as f32 / 255.0, 0.0],
+                    sky_bottom: [sky_bottom.r() as f32 / 255.0, sky_bottom.g() as f32 / 255.0, sky_bottom.b() as f32 / 255.0, 0.0],
+                    model_params: match ui.solid_shading_model {
+                        ui::SolidShadingModel::Toon       => [ui.solid_toon_bands, ui.solid_toon_rim, 0.0, 0.0],
+                        ui::SolidShadingModel::Subsurface => [ui.solid_sss_strength, ui.solid_sss_power, 0.0, 0.0],
+                        _ => [0.0, 0.0, 0.0, 0.0],
+                    },
+                },
+                bg_color,
+            );
+        } else if ui.render_mode == RenderMode::Points {
+            if self.pending_clear {
+                gpu.histogram.clear(&mut encoder);
+                self.pending_clear = false;
+                ui.iter_count = 0;
+            }
+
+            let vp = self.camera.view_proj();
+            let eye = self.camera.eye();
+
+            let az = ui.solid_light_azimuth_deg.to_radians();
+            let el = ui.solid_light_elevation_deg.to_radians();
+            let light_dir = glam::Vec3::new(
+                el.cos() * az.cos(),
+                el.sin(),
+                el.cos() * az.sin(),
+            );
+
+            // Orthographic light view-proj, fit to the cached CPU bounds
+            // estimate (no CPU mesh to read bb_min/bb_max from like Solid).
+            // Feeds both dispatch_sim (the light-space splat) and the
+            // composite pass's shadow lookup below.
+            let (bb_min, bb_max) = self.points_bounds;
+            let center = (bb_min + bb_max) * 0.5;
+            // estimate_bounds_cpu samples one CPU trajectory; the GPU sim runs
+            // many parallel trajectories from different random ICs, which can
+            // collectively reveal a larger extent than that single orbit found
+            // in reasonable time. A too-tight frustum here clips part of the
+            // accumulated geometry out of the shadow test entirely (it falls
+            // back to unconditionally "lit"), leaving a hard, light-direction-
+            // independent box-shaped boundary around whatever's still inside
+            // -- pad generously so the real extent stays safely contained.
+            let radius = (((bb_max - bb_min).length() * 0.5) * 1.75).max(1e-3);
+            let light_eye = center + light_dir * (radius * 2.0);
+            let light_up_ref = if light_dir.y.abs() < 0.9 { glam::Vec3::Y } else { glam::Vec3::X };
+            let light_view = glam::Mat4::look_at_rh(light_eye, center, light_up_ref);
+            let light_proj = glam::Mat4::orthographic_rh(-radius, radius, -radius, radius, 0.01, radius * 4.0);
+            let light_view_proj = light_proj * light_view;
+
+            gpu.histogram.dispatch_sim(
+                &gpu.queue, &mut encoder, vp, &ui.attractor, ui.noise_magnitude,
+                light_view_proj, ui.points_radius,
+            );
+            ui.iter_count = ui.iter_count.saturating_add(
+                gpu::histogram::SIM_NUM_TRAJECTORIES as u64 * gpu::histogram::SIM_STEPS_PER_DISPATCH as u64
+            );
+
+            let base = ui.solid_color;
+            let spec = ui.solid_specular_color;
+            let sky_top = ui.solid_sky_top;
+            let sky_bottom = ui.solid_sky_bottom;
+            let cw = gpu.histogram.width;
+            let ch = gpu.histogram.height;
+            let ss = gpu.histogram.ss_scale;
+            gpu.points.render(
+                &gpu.queue,
+                &mut encoder,
+                gpu.histogram.canvas_view(),
+                gpu::PointsParams {
+                    view_proj:         vp.to_cols_array(),
+                    inverse_view_proj: vp.inverse().to_cols_array(),
+                    light_view_proj:   light_view_proj.to_cols_array(),
+                    camera_pos: [eye.x, eye.y, eye.z, 0.0],
+                    light_dir_ambient: [light_dir.x, light_dir.y, light_dir.z, ui.solid_ambient],
+                    base_color_alpha: [
+                        base.r() as f32 / 255.0,
+                        base.g() as f32 / 255.0,
+                        base.b() as f32 / 255.0,
+                        ui.solid_alpha,
+                    ],
+                    specular_shininess: [
+                        spec.r() as f32 / 255.0,
+                        spec.g() as f32 / 255.0,
+                        spec.b() as f32 / 255.0,
+                        ui.solid_shininess,
+                    ],
+                    material_extra: [
+                        ui.solid_roughness,
+                        ui.solid_metalness,
+                        ui.solid_shading_model.as_u32() as f32,
+                        ui.solid_anisotropy,
+                    ],
+                    reflect_refract: [
+                        ui.solid_reflectivity,
+                        ui.solid_ior,
+                        ui.solid_refraction,
+                        0.0,
+                    ],
+                    sky_top: [sky_top.r() as f32 / 255.0, sky_top.g() as f32 / 255.0, sky_top.b() as f32 / 255.0, 0.0],
+                    sky_bottom: [sky_bottom.r() as f32 / 255.0, sky_bottom.g() as f32 / 255.0, sky_bottom.b() as f32 / 255.0, 0.0],
+                    model_params: match ui.solid_shading_model {
+                        ui::SolidShadingModel::Toon       => [ui.solid_toon_bands, ui.solid_toon_rim, 0.0, 0.0],
+                        ui::SolidShadingModel::Subsurface => [ui.solid_sss_strength, ui.solid_sss_power, 0.0, 0.0],
+                        _ => [0.0, 0.0, 0.0, 0.0],
+                    },
+                    canvas_a: [cw, ch, ss, cw * ss],
+                    canvas_b: [ch * ss, gpu::POINTS_LIGHT_BUF_SIZE, 0, 0],
+                },
+                bg_color,
+            );
+        } else {
+            if self.pending_clear {
+                gpu.histogram.clear(&mut encoder);
+                self.pending_clear = false;
+                ui.iter_count = 0;
+            }
+
+            let vp = self.camera.view_proj();
+            // Points mode's light-space splat/radius are irrelevant here
+            // (Monochrome/Light never read the Points buffers this fills),
+            // but dispatch_sim always splats them -- harmless extra writes.
+            gpu.histogram.dispatch_sim(&gpu.queue, &mut encoder, vp, &ui.attractor, ui.noise_magnitude, glam::Mat4::IDENTITY, 0);
+            ui.iter_count = ui.iter_count.saturating_add(
+                gpu::histogram::SIM_NUM_TRAJECTORIES as u64 * gpu::histogram::SIM_STEPS_PER_DISPATCH as u64
+            );
+
+            let cw = gpu.histogram.width;
+            let ch = gpu.histogram.height;
+            const WEIGHT_SCALE: f32 = 1024.0;
+            let ss = gpu.histogram.ss_scale;
+            let max_display = gpu.histogram.last_max_density as f32 / WEIGHT_SCALE;
+            let log_max = (max_display + 1.0).ln().max(1e-6);
+            gpu.histogram.composite(
+                &gpu.queue,
+                &mut encoder,
+                CompositeParams {
+                    width:           cw,
+                    height:          ch,
+                    log_max_density: log_max,
+                    brightness:      ui.brightness,
+                    gamma:           ui.gamma.max(1e-4),
+                    ss_width:        cw * ss,
+                    ss_height:       ch * ss,
+                    max_sigma:       ui.max_sigma,
+                    min_sigma:       ui.min_sigma,
+                    ss_scale:        ss,
+                    blend_mode:      ui.blend_mode.as_u32(),
+                    max_speed_enc:   gpu.histogram.last_max_speed,
+                    alpha_power:     ui.alpha_power,
+                },
+                ui.render_mode,
+                bg_color,
+            );
+
+            gpu.histogram.blit_to_canvas(&mut encoder);
+            gpu.histogram.encode_max_readback(&mut encoder);
+        }
 
         // ---- egui render pass ----
         let screen_desc = egui_wgpu::ScreenDescriptor {
@@ -679,7 +972,11 @@ impl App {
         // ---- Movie job: per-frame completion ----
         if let Some(job) = &mut self.movie_job {
             if let movie::MovieStatus::Rendering { .. } = job.status() {
-                if job.iter_target_reached(ui.iter_count) {
+                // Solid mode has no histogram to accumulate -- the mesh
+                // rebuild + render above already happened synchronously
+                // within this same tick (see the `self.mesh_dirty` block),
+                // so the frame is complete and ready to capture immediately.
+                if ui.render_mode == RenderMode::Solid || job.iter_target_reached(ui.iter_count) {
                     let (w, h, mut pixels) = gpu.histogram.read_canvas_pixels(&gpu.device, &gpu.queue);
                     if ui.color_space_srgb {
                         srgb_encode_pixels(&mut pixels);
@@ -736,6 +1033,25 @@ impl App {
                     Ok(()) => log::info!("Saved state to {}", path.display()),
                     Err(e) => log::error!("Failed to save state: {e}"),
                 }
+            }
+        }
+
+        if ui.export_mesh_requested {
+            match &self.solid_mesh {
+                Some(mesh) => {
+                    let chosen_path = rfd::FileDialog::new()
+                        .set_title("Export Mesh")
+                        .set_file_name("attractor_mesh.obj")
+                        .add_filter("Wavefront OBJ", &["obj"])
+                        .save_file();
+                    if let Some(path) = chosen_path {
+                        match mesh_export::export_obj(mesh, &path) {
+                            Ok(()) => log::info!("Exported mesh to {}", path.display()),
+                            Err(e) => log::error!("Failed to export mesh: {e}"),
+                        }
+                    }
+                }
+                None => log::warn!("Export Mesh requested but no Solid mesh is currently built."),
             }
         }
 

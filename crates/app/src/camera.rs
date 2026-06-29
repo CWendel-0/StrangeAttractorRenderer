@@ -105,8 +105,13 @@ impl ArcballCamera {
         self.dirty = true;
     }
 
+    /// World-space eye (camera) position — used by Solid mode's specular term.
+    pub fn eye(&self) -> Vec3 {
+        self.target + self.rotation * Vec3::new(0.0, 0.0, self.distance)
+    }
+
     pub fn view_proj(&self) -> Mat4 {
-        let eye = self.target + self.rotation * Vec3::new(0.0, 0.0, self.distance);
+        let eye = self.eye();
         let view = Mat4::look_at_rh(eye, self.target, self.rotation * Vec3::Y);
         let proj = Mat4::perspective_rh(self.fov_y, self.aspect, 0.1, 10_000.0);
         proj * view

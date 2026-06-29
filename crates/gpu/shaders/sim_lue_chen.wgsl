@@ -14,6 +14,10 @@ struct SimParams {
     ss_height: u32,
     steps:     u32,
     num_traj:  u32,
+    light_view_proj: mat4x4<f32>,      // orthographic, for Points mode shadow-buffer splatting
+    points_radius:   u32,              // Points mode camera-space splat footprint radius (0 = single pixel)
+    light_buf_size:  u32,              // Points mode shadow buffer resolution (square)
+    _points_pad:     vec2<u32>,        // keeps `p`'s start offset 16-byte aligned
     p:         array<vec4<f32>, 12>,
 }
 
@@ -21,6 +25,9 @@ struct SimParams {
 @group(0) @binding(1) var<storage, read_write> accum:       array<atomic<u32>>;
 @group(0) @binding(2) var<storage, read_write> max_vals: array<atomic<u32>, 2>;
 @group(0) @binding(3) var<uniform>             params:      SimParams;
+@group(0) @binding(4) var<storage, read_write> points_depth: array<atomic<u32>>;
+@group(0) @binding(5) var<storage, read_write> points_hit: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> points_light_depth: array<atomic<u32>>;
 
 const WEIGHT_SCALE: f32 = 1024.0;
 const SPEED_SCALE:  u32 = 256u;
@@ -96,7 +103,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let speed_enc = min(u32(log(speed_raw + 1.0) * 32.0), 255u);
         atomicMax(&max_vals[1], speed_enc);
 
-        let clip = params.view_proj * vec4<f32>(x, y, z, 1.0);
+        let world_pos4 = vec4<f32>(x, y, z, 1.0);
+
+        // Light-space splat first, independent of camera visibility -- the
+        // shadow buffer should reflect points even when they're currently
+        // outside the camera's view.
+        let light_clip = params.light_view_proj * world_pos4;
+        if light_clip.w > 0.0 {
+            let light_ndc = light_clip.xyz / light_clip.w;
+            if light_ndc.x >= -1.0 && light_ndc.x <= 1.0 && light_ndc.y >= -1.0 && light_ndc.y <= 1.0 {
+                let light_fx = (light_ndc.x * 0.5 + 0.5) * f32(params.light_buf_size);
+                let light_fy = (1.0 - (light_ndc.y * 0.5 + 0.5)) * f32(params.light_buf_size);
+                let light_px = i32(light_fx);
+                let light_py = i32(light_fy);
+                if light_px >= 0 && light_py >= 0 && u32(light_px) < params.light_buf_size && u32(light_py) < params.light_buf_size {
+                    let light_idx = u32(light_py) * params.light_buf_size + u32(light_px);
+                    let light_depth_enc = u32(clamp(1.0 - light_ndc.z, 0.0, 1.0) * 4294967295.0);
+                    atomicMax(&points_light_depth[light_idx], light_depth_enc);
+                }
+            }
+        }
+
+        let clip = params.view_proj * world_pos4;
         if clip.w <= 0.0 { continue; }
         let ndc = clip.xyz / clip.w;
         if ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0 { continue; }
@@ -124,6 +152,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let sc01 = speed_enc * w01 / SPEED_SCALE;
         let sc11 = speed_enc * w11 / SPEED_SCALE;
 
+        let depth_enc = u32(clamp(1.0 - ndc.z, 0.0, 1.0) * 4294967295.0);
+        let radius_i = i32(params.points_radius);
+        for (var dy2 = -radius_i; dy2 <= radius_i; dy2++) {
+            for (var dx2 = -radius_i; dx2 <= radius_i; dx2++) {
+                let ppx = px0 + dx2;
+                let ppy = py0 + dy2;
+                if ppx >= 0 && ppy >= 0 && u32(ppx) < params.ss_width && u32(ppy) < params.ss_height {
+                    let pidx = u32(ppy) * params.ss_width + u32(ppx);
+                    atomicMax(&points_depth[pidx], depth_enc);
+                    atomicAdd(&points_hit[pidx], 1u);
+                }
+            }
+        }
         splat_pixel(px0,     py0,     w00, sc00);
         splat_pixel(px0 + 1, py0,     w10, sc10);
         splat_pixel(px0,     py0 + 1, w01, sc01);
